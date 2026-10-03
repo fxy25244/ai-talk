@@ -1,7 +1,6 @@
 const CACHE_NAME = 'aitalk-cache-v1';
 const urlsToCache = [
-  './index.html',
-  'https://unpkg.com/vue@3/dist/vue.global.prod.js'
+  './index.html'
 ];
 
 self.addEventListener('install', event => {
