@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>あいTalk</title>
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js');
+    });
+  }
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f5f5f7}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column;max-width:600px;margin:0 auto;background:#fff;position:relative;overflow:hidden}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));border-bottom:1px solid #eee;background:#fff;z-index:10}
+.header-avatar{width:32px;height:32px;border-radius:50%;background:#e0f2fe;color:#0369a1;display:flex;justify-content:center;align-items:center;font-size:14px;font-weight:600;flex-shrink:0}
+header .title{flex:1;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header button{background:none;border:none;font-size:14px;color:#555;cursor:pointer;padding:4px 8px;border-radius:6px}
+header button:hover{background:#f0f0f0}
+.settings{padding:12px 16px;background:#fafafa;border-bottom:1px solid #eee;display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;z-index:20;position:absolute;top:60px;left:0;right:0;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.settings label{display:flex;flex-direction:column;font-size:12px;color:#666;gap:4px}
+.settings input,.settings textarea{padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
+.settings textarea{min-height:90px;resize:vertical}
+.settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;margin-top:4px}
+main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;width:100%;}
+.msg.user{justify-content:flex-end}
+.msg.assistant{justify-content:flex-start}
+.bubble-container { display: flex; flex-direction: column; max-width: 75%; }
+.msg.user .bubble-container { align-items: flex-end; }
+.char-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #e0f2fe; color: #0369a1; display: flex; justify-content: center; align-items: center; font-size: 16px; font-weight: 600; flex-shrink: 0; margin-top: 4px; margin-right: 8px; user-select: none; }
+.bubble{min-width: 60px;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.05);text-align:left}
+.msg.user .bubble{background:#007aff;color:#fff;border-bottom-right-radius:4px}
+.msg.assistant .bubble{background:#f0f0f2;color:#111;border-bottom-left-radius:4px}
+.edit-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.edit-box textarea { width: 100%; padding: 10px; border: 1px solid #007aff; border-radius: 12px; font-size: 15px; font-family: inherit; resize: vertical; min-height: 60px; }
+.edit-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.edit-btns button { padding: 6px 14px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.btn-save { background: #007aff; color: #fff; }
+.btn-cancel { background: #eee; color: #333; }
+.action-btns { display: flex; gap: 4px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+.action-btn { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all 0.2s; }
+.action-btn:hover { background: #f0f0f0; color: #333; }
+.route-switcher { display: flex; align-items: center; gap: 6px; background: #f0f8ff; border: 1px solid #cce5ff; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #007aff; }
+.route-switcher button { background: none; border: none; color: #007aff; font-size: 14px; cursor: pointer; padding: 0 4px; }
+.route-switcher button:disabled { color: #ccc; }
+footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
+footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;height:42px;line-height:20px}
+footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500}
+footer button:disabled{opacity:.4}
+footer textarea:disabled { background: #f9f9f9; color: #999; }
+
+/* 日记本弹层样式 */
+.diary-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
+.diary-panel { width: 100%; height: 80%; background: #fff; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: slideUp 0.3s ease-out; overflow: hidden; max-width: 600px; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.diary-header { padding: 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
+.diary-header h3 { font-size: 16px; color: #333; }
+.diary-header button { background: none; border: none; font-size: 14px; color: #999; cursor: pointer; }
+.diary-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.diary-empty { text-align: center; color: #999; font-size: 14px; margin-top: 50px; }
+.diary-item { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f0f0f0; }
+.diary-date { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; }
+.diary-text { font-size: 14px; line-height: 1.7; color: #333; white-space: pre-wrap; }
+.diary-footer { padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #eee; background: #fff; display: flex; justify-content: center; }
+.btn-write-diary { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-write-diary:disabled { opacity: 0.5; background: #ccc; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="header-avatar">{{ getAvatarChar(cfg.name) }}</div>
+    <div class="title">{{ cfg.name || 'あいTalk' }}</div>
+    <button @click="showDiary = true" title="查看日记">&#128214; 日记</button>
+    <button @click="showSettings = !showSettings">&#9881; 设置</button>
+  </header>
+
+  <div class="settings" v-if="showSettings">
+    <label>API 地址<input v-model="cfg.baseUrl" @change="save"></label>
+    <label>API Key<input v-model="cfg.apiKey" @change="save" type="password"></label>
+    <label>模型名<input v-model="cfg.model" @change="save"></label>
+    <label>角色名<input v-model="cfg.name" @change="save"></label>
+    <label>长期记忆 (她会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入她总结的回忆。"></textarea></label>
+    <label>角色设定<textarea v-model="cfg.system" @change="save"></textarea></label>
+    <button class="btn-clear" @click="clear">清空对话（重置记忆与时间线）</button>
+  </div>
+
+  <main ref="listEl">
+    <div v-for="(m,i) in messages" :key="i" :class="['msg', m.role]">
+      <div v-if="m.role === 'assistant'" class="char-avatar">
+        {{ getAvatarChar(cfg.name) }}
+      </div>
+      
+      <div class="bubble-container">
+        <div v-if="editingIndex === i" class="edit-box">
+          <textarea v-model="editInput"></textarea>
+          <div class="edit-btns">
+            <button class="btn-cancel" @click="cancelEdit">取消</button>
+            <button class="btn-save" @click="saveEdit(i)">保存并重新生成</button>
+          </div>
+        </div>
+        
+        <div v-else class="bubble">{{ m.content || '...' }}</div>
+        
+        <div v-if="editingIndex !== i && !loading" class="action-btns">
+          <div v-if="branches[i] && branches[i].list.length > 1" class="route-switcher">
+            <button @click="switchRoute(i, -1)">&#9664;</button>
+            <span>路线 {{ branches[i].active + 1 }} / {{ branches[i].list.length }}</span>
+            <button @click="switchRoute(i, 1)">&#9654;</button>
+          </div>
+          <button v-if="m.role === 'user'" @click="startEdit(i)" class="action-btn">&#9998; 修改</button>
+          <button v-if="i === messages.length - 1 && m.role === 'assistant'" @click="regenerate" class="action-btn">&#128260; 重新生成</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <textarea v-model="input" placeholder="说点什么…" @keydown.enter.exact.prevent="send" :disabled="loading"></textarea>
+    <button @click="send" :disabled="loading">发送</button>
+  </footer>
+
+  <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
+    <div class="diary-panel">
+      <div class="diary-header">
+        <h3>&#128214; {{ cfg.name || 'AI' }} 的日记本</h3>
+        <button @click="showDiary = false">关闭</button>
+      </div>
+      <div class="diary-list">
+        <div v-if="diaryLogs.length === 0" class="diary-empty">还没有写过日记，快让她记录下今天的点滴吧～</div>
+        <div v-for="log in diaryLogs" :key="log.timestamp" class="diary-item">
+          <div class="diary-date">{{ log.date }}</div>
+          <div class="diary-text">{{ log.content }}</div>
+        </div>
+      </div>
+      <div class="diary-footer">
+        <button class="btn-write-diary" @click="generateDiary" :disabled="isGeneratingDiary || loading">
+          {{ isGeneratingDiary ? '正在动笔写日记...' : '&#9997; 写今天的日记' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, nextTick, onMounted, onUnmounted } = Vue;
+
+createApp({
+  setup() {
+    // 🎯 通用底层设定，强制使用 TA
+    const defaultSystemPrompt = `你是一个正在与用户对话的 AI 助手。请严格按照用户在“角色设定”中填写的设定来扮演角色。
+【通用规则】
+1. 请使用“你”来称呼玩家。
+2. 当需要指代玩家时，请务必使用中性代词“TA”，绝对不要擅自使用“他”或“她”，除非玩家在设定中明确要求。
+3. 如果玩家设定了称呼、性格、世界观，请绝对遵从。`;
+
+    const cfg = ref(JSON.parse(localStorage.getItem('cfg') || 'null') || {
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: '',
+      model: 'deepseek-chat',
+      name: '新角色',
+      memory: '',
+      system: defaultSystemPrompt
+    });
+    
+    const messages = ref(JSON.parse(localStorage.getItem('messages') || '[]'));
+    const input = ref('');
+    const loading = ref(false);
+    const isSummarizing = ref(false);
+    const showSettings = ref(!cfg.value.apiKey);
+    const listEl = ref(null);
+    
+    const branches = ref(JSON.parse(localStorage.getItem('branches') || '{}'));
+    const editingIndex = ref(-1);
+    const editInput = ref('');
+
+    const showDiary = ref(false);
+    const diaryLogs = ref(JSON.parse(localStorage.getItem('diaryLogs') || '[]'));
+    const isGeneratingDiary = ref(false);
+
+    let inactivityTimer = null;
+
+    const save = () => localStorage.setItem('cfg', JSON.stringify(cfg.value));
+    const saveMessages = () => localStorage.setItem('messages', JSON.stringify(messages.value));
+    const saveBranches = () => localStorage.setItem('branches', JSON.stringify(branches.value));
+    const saveDiary = () => localStorage.setItem('diaryLogs', JSON.stringify(diaryLogs.value));
+    
+    const clear = () => { 
+      messages.value = []; 
+      branches.value = {};
+      saveMessages();
+      saveBranches();
+      localStorage.removeItem('lastMessageTime'); 
+      clearInactivityTimer();
+    };
+
+    const getAvatarChar = (name) => {
+      if (!name) return '?';
+      return name.trim().charAt(0).toUpperCase();
+    };
+
+    async function toBottom() {
+      await nextTick();
+      if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight;
+    }
+
+    async function generateDiary() {
+      if (isGeneratingDiary.value || loading.value || !cfg.value.apiKey) return;
+      if (messages.value.length === 0) {
+        alert("你们还没有聊过天，TA 写不出日记哦～");
+        return;
+      }
+
+      isGeneratingDiary.value = true;
+      
+      const recentChat = messages.value.slice(-30).map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n');
+      
+      const prompt = `你现在的身份是「${cfg.value.name}」。
+请根据以下今天你和 TA 的聊天记录，以你的第一人称口吻，写一篇今天的日记。
+要求：
+1. 语气完全符合你的角色设定。
+2. 记录今天发生的事、你的心情和感受。
+3. 字数在 150-200 字左右。
+4. 直接输出日记正文，不要加任何诸如“日记：”这样的前缀。
+
+今天的聊天记录：
+${recentChat}`;
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({
+            model: cfg.value.model,
+            stream: false,
+            messages: [
+              { role: 'system', content: cfg.value.system },
+              { role: 'user', content: prompt }
+            ]
+          })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const diaryContent = data.choices[0].message.content;
+
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+
+        diaryLogs.value = diaryLogs.value.filter(log => log.date !== dateStr);
+        diaryLogs.value.unshift({
+          date: dateStr,
+          content: diaryContent,
+          timestamp: Date.now()
+        });
+
+        saveDiary();
+        alert("日记写好啦！");
+      } catch (e) {
+        alert("写日记失败了：" + e.message);
+      } finally {
+        isGeneratingDiary.value = false;
+      }
+    }
+
+    const getHolidayString = (month, date) => {
+      const mm = month.toString().padStart(2, '0');
+      const dd = date.toString().padStart(2, '0');
+      const key = `${mm}-${dd}`;
+      const holidays = {
+        '01-01': '元旦节', '02-14': '情人节', '03-08': '妇女节', '03-12': '植树节',
+        '04-01': '愚人节', '05-01': '劳动节', '05-04': '青年节', '06-01': '儿童节',
+        '09-10': '教师节', '10-01': '国庆节', '12-24': '平安夜', '12-25': '圣诞节'
+      };
+      if (holidays[key]) return `今天是${holidays[key]}。`;
+
+      const d = new Date(month + '/1/2026');
+      const dayOfWeek = d.getDay();
+      if (month === 5) {
+        const secondSunday = 1 + (7 - dayOfWeek) % 7 + 7;
+        if (date === secondSunday) return '今天是母亲节。';
+      }
+      if (month === 6) {
+        const thirdSunday = 1 + (7 - dayOfWeek) % 7 + 14;
+        if (date === thirdSunday) return '今天是父亲节。';
+      }
+      return '今天是一个普通的日子。';
+    };
+
+    const getCurrentTimeString = () => {
+      const now = new Date();
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+      const date = now.getDate();
+      const day = weekdays[now.getDay()];
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      
+      let period = "深夜";
+      if (hours >= 5 && hours < 9) period = "早晨";
+      else if (hours >= 9 && hours < 12) period = "上午";
+      else if (hours >= 12 && hours < 14) period = "中午";
+      else if (hours >= 14 && hours < 18) period = "下午";
+      else if (hours >= 18 && hours < 23) period = "晚上";
+
+      const holidayText = getHolidayString(month, date);
+      return `${year}年${month}月${date}日 ${day} ${period}${hours}:${minutes}。${holidayText}`;
+    };
+
+    const buildMessagesForAI = (newMessages) => {
+      let systemPrompt = cfg.value.system;
+      const timeString = getCurrentTimeString();
+      systemPrompt += `\n\n【当前现实时间与节日】现在是：${timeString}。请根据这个时间节点和节日，在对话中表现出符合情境的反应。`;
+      systemPrompt += `\n\n【通用规则提醒】请使用“你”来称呼玩家。当需要指代玩家时，请务必使用中性代词“TA”，绝对不要擅自使用“他”或“她”。`;
+
+      if (cfg.value.memory && cfg.value.memory.trim() !== '') {
+        systemPrompt += `\n\n【长期记忆】\n${cfg.value.memory}`;
+      }
+      const recentHistory = newMessages.slice(-30);
+      return [
+        { role: 'system', content: systemPrompt },
+        ...recentHistory
+      ];
+    };
+
+    const clearInactivityTimer = () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      }
+    };
+
+    const startInactivityTimer = () => {
+      clearInactivityTimer();
+      inactivityTimer = setTimeout(triggerInactivitySequence, 120000);
+    };
+
+    async function triggerInactivitySequence() {
+      clearInactivityTimer();
+      if (loading.value || !cfg.value.apiKey) return;
+      
+      loading.value = true;
+      const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '' });
+      toBottom();
+
+      const promptForAI = buildMessagesForAI([
+        ...messages.value.slice(0, idx),
+        { role: 'user', content: '（系统提示：玩家已经有一段时间没有回复了。请你以角色身份，给 TA 发两条消息。\n第一条：表达你此刻的想法、感受，或者对刚才对话的思考。不要直接问 TA 在不在。动作描写要符合人设，大约 1-2 句话。\n第二条：问问 TA 在不在，语气要自然，可以带一点小心或者委屈，大约 1 句话。\n请严格使用 ---SPLIT--- 将两条消息分隔开，不要输出其它多余内容。）' }
+      ]);
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: false, messages: promptForAI })
+        });
+
+        if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+        const data = await res.json();
+        const fullText = data.choices[0].message.content;
+
+        const parts = fullText.split('---SPLIT---').map(s => s.trim()).filter(Boolean);
+        
+        if (parts.length >= 2) {
+          messages.value[idx].content = parts[0];
+          messages.value.push({ role: 'assistant', content: parts[1] });
+        } else {
+          messages.value[idx].content = fullText;
+        }
+      } catch (e) {
+        messages.value[idx].content += '\n\n[出错] ' + e.message;
+      } finally {
+        loading.value = false;
+        saveMessages();
+        toBottom();
+      }
+    }
+
+    async function autoSummarize() {
+      if (isSummarizing.value || loading.value || messages.value.length < 20) return;
+      isSummarizing.value = true;
+
+      const toSummarize = messages.value.slice(0, 14);
+      const remaining = messages.value.slice(14);
+
+      const promptMessages = [
+        { role: 'system', content: '你是一个记忆压缩助手。请将以下对话总结成一段简短的记忆。重点提取：玩家的偏好、重要事件、当前关系状态。使用第三人称，200字以内。请务必使用中性代词“TA”来指代玩家，绝对不要使用“他”或“她”。' },
+        { role: 'user', content: `原有记忆：${cfg.value.memory || '暂无'}\n\n新对话：\n` + toSummarize.map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n') }
+      ];
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: false, messages: promptMessages })
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        const summary = data.choices[0].message.content;
+        cfg.value.memory = (cfg.value.memory ? cfg.value.memory + '\n\n' : '') + '【前情提要】' + summary;
+        save();
+        messages.value = remaining;
+        saveMessages();
+      } catch (e) {
+        console.error("总结失败：", e);
+      } finally {
+        isSummarizing.value = false;
+      }
+    }
+
+    const startEdit = (index) => {
+      if (loading.value) return;
+      editingIndex.value = index;
+      editInput.value = messages.value[index].content;
+    };
+
+    const cancelEdit = () => {
+      editingIndex.value = -1;
+      editInput.value = '';
+    };
+
+    const saveEdit = async (index) => {
+      const newText = editInput.value.trim();
+      if (!newText) return;
+
+      const oldTimeline = JSON.parse(JSON.stringify(messages.value));
+      messages.value[index].content = newText;
+      messages.value = messages.value.slice(0, index + 1);
+      
+      editingIndex.value = -1;
+      editInput.value = '';
+      
+      loading.value = true;
+      saveMessages();
+      
+      const aiIdx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '' });
+      toBottom();
+
+      const payloadMessages = buildMessagesForAI(messages.value.slice(0, aiIdx));
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: true, messages: payloadMessages })
+        });
+
+        if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop(); 
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const data = s.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+              if (delta) { messages.value[aiIdx].content += delta; toBottom(); }
+            } catch (e) { }
+          }
+        }
+      } catch (e) {
+        messages.value[aiIdx].content += '\n\n[出错] ' + e.message;
+      } finally {
+        loading.value = false;
+        const newTimeline = JSON.parse(JSON.stringify(messages.value));
+        
+        if (!branches.value[index]) {
+          branches.value[index] = { active: 0, list: [oldTimeline] };
+        }
+        branches.value[index].list.push(newTimeline);
+        branches.value[index].active = branches.value[index].list.length - 1;
+        
+        saveBranches();
+        saveMessages();
+        localStorage.setItem('lastMessageTime', Date.now());
+        toBottom();
+        autoSummarize();
+        startInactivityTimer();
+      }
+    };
+
+    const switchRoute = (index, direction) => {
+      if (loading.value) return;
+      const branch = branches.value[index];
+      if (!branch) return;
+
+      let newActive = branch.active + direction;
+      if (newActive < 0) newActive = branch.list.length - 1;
+      if (newActive >= branch.list.length) newActive = 0;
+
+      branch.active = newActive;
+      messages.value = JSON.parse(JSON.stringify(branch.list[newActive]));
+      
+      saveMessages();
+      saveBranches();
+      toBottom();
+    };
+
+    async function regenerate() {
+      if (loading.value || messages.value.length === 0) return;
+      
+      const lastMsg = messages.value[messages.value.length - 1];
+      if (lastMsg.role !== 'assistant') return;
+
+      messages.value.pop();
+      loading.value = true;
+      saveMessages();
+      toBottom();
+
+      const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '' });
+      
+      let payloadMessages = [];
+      const history = messages.value.slice(0, idx);
+
+      if (history.length === 0) {
+        payloadMessages = buildMessagesForAI([
+          { role: 'user', content: '（系统提示：玩家刚刚打开了聊天界面，请你以角色身份主动打招呼。动作描写要符合人设。请使用“你”称呼玩家，用“TA”指代玩家。）' }
+        ]);
+      } else {
+        payloadMessages = buildMessagesForAI(history);
+      }
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: true, messages: payloadMessages })
+        });
+
+        if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop(); 
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const data = s.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+              if (delta) { messages.value[idx].content += delta; toBottom(); }
+            } catch (e) { }
+          }
+        }
+      } catch (e) {
+        messages.value[idx].content += '\n\n[出错] ' + e.message;
+      } finally {
+        loading.value = false;
+        saveMessages();
+        toBottom();
+        autoSummarize();
+      }
+    }
+
+    async function triggerGreeting() {
+      if (loading.value || !cfg.value.apiKey) return;
+      loading.value = true;
+      
+      const now = Date.now();
+      const lastTime = parseInt(localStorage.getItem('lastMessageTime')) || 0;
+      const diffMs = now - lastTime;
+      
+      let timeAgoText = "";
+      if (lastTime === 0) {
+        timeAgoText = "这是你们第一次见面";
+      } else if (diffMs < 60 * 1000) {
+        timeAgoText = "刚刚才发过消息，又回来了";
+      } else if (diffMs < 60 * 60 * 1000) {
+        timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (60 * 1000))} 分钟`;
+      } else if (diffMs < 24 * 60 * 60 * 1000) {
+        timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (60 * 60 * 1000))} 个小时`;
+      } else {
+        timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (24 * 60 * 60 * 1000))} 天`;
+      }
+
+      const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '' });
+      toBottom();
+
+      const promptForAI = buildMessagesForAI([
+        { role: 'user', content: `（系统提示：玩家打开了聊天界面。当前状态：【${timeAgoText}】。请你以角色身份主动向玩家打招呼，并根据分开的时间长短、当前现实时间以及第一见面的设定，自然表现出相应的情绪。请使用“你”称呼玩家，用“TA”指代玩家。不要提及这段系统提示。）` }
+      ]);
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: true, messages: promptForAI })
+        });
+
+        if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop(); 
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const data = s.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+              if (delta) { messages.value[idx].content += delta; toBottom(); }
+            } catch (e) { }
+          }
+        }
+      } catch (e) {
+        messages.value[idx].content += '\n\n[出错] ' + e.message;
+      } finally {
+        loading.value = false;
+        saveMessages();
+        localStorage.setItem('lastMessageTime', Date.now());
+        toBottom();
+        startInactivityTimer();
+      }
+    }
+
+    onMounted(() => {
+      if (cfg.value.apiKey) {
+        triggerGreeting();
+      }
+    });
+
+    onUnmounted(() => {
+      clearInactivityTimer();
+    });
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text || loading.value) return;
+      input.value = '';
+      
+      messages.value.push({ role: 'user', content: text });
+      const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '' });
+      loading.value = true;
+      saveMessages();
+      toBottom();
+
+      const payloadMessages = buildMessagesForAI(messages.value.slice(0, idx));
+
+      try {
+        const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: cfg.value.model, stream: true, messages: payloadMessages })
+        });
+
+        if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop(); 
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const data = s.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+              if (delta) { messages.value[idx].content += delta; toBottom(); }
+            } catch (e) { }
+          }
+        }
+      } catch (e) {
+        messages.value[idx].content += '\n\n[出错] ' + e.message;
+      } finally {
+        loading.value = false;
+        saveMessages();
+        localStorage.setItem('lastMessageTime', Date.now());
+        toBottom();
+        autoSummarize();
+        startInactivityTimer();
+      }
+    }
+
+    return { cfg, messages, input, loading, showSettings, listEl, send, save, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
