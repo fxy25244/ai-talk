@@ -50,7 +50,7 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .route-switcher button { background: none; border: none; color: #007aff; font-size: 14px; cursor: pointer; padding: 0 4px; }
 .route-switcher button:disabled { color: #ccc; }
 footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
-footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;height:42px;line-height:20px}
+footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;min-height:42px;max-height:120px;line-height:20px;overflow-y:auto;transition:height 0.1s ease;}
 footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500}
 footer button:disabled{opacity:.4}
 footer textarea:disabled { background: #f9f9f9; color: #999; }
@@ -175,7 +175,7 @@ createApp({
     const loading = ref(false);
     const isSummarizing = ref(false);
     const showSettings = ref(!cfg.value.apiKey);
-    const listEl = ref(null);
+        const inputTextarea = ref(null);
     
     const branches = ref(JSON.parse(localStorage.getItem('branches') || '{}'));
     const editingIndex = ref(-1);
@@ -213,6 +213,14 @@ createApp({
       return name.trim().charAt(0).toUpperCase();
     };
 
+        // 🎯 新增：输入框自动增高逻辑
+    const autoResize = () => {
+      const el = inputTextarea.value;
+      if (el) {
+        el.style.height = 'auto'; // 先重置高度，才能算出真实的滚动高度
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px'; // 限制最高120px，防止占满屏幕
+      }
+    };
     async function toBottom() {
       await nextTick();
       if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight;
@@ -790,7 +798,7 @@ ${recentChat}`;
       }
     }
 
-    return { cfg, messages, input, loading, showSettings, listEl, send, save, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary };
+    return { cfg, messages, input, loading, showSettings, listEl, send, save, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, inputTextarea, autoResize }; 
   }
 }).mount('#app');
 </script>
