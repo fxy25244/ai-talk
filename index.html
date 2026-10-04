@@ -26,7 +26,10 @@ header button:hover{background:#f0f0f0}
 .settings label{display:flex;flex-direction:column;font-size:12px;color:#666;gap:4px}
 .settings input,.settings textarea{padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
 .settings textarea{min-height:90px;resize:vertical}
-.settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;margin-top:4px}
+.settings .btn-row{display:flex;gap:8px;margin-top:4px}
+.settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;flex:1}
+.settings .btn-backup{padding:8px;border:none;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:14px;cursor:pointer;flex:1}
+.settings .btn-restore{padding:8px;border:none;border-radius:8px;background:#fff3e0;color:#e65100;font-size:14px;cursor:pointer;flex:1}
 main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .msg{display:flex;width:100%;}
 .msg.user{justify-content:flex-end}
@@ -49,9 +52,9 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .route-switcher { display: flex; align-items: center; gap: 6px; background: #f0f8ff; border: 1px solid #cce5ff; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #007aff; }
 .route-switcher button { background: none; border: none; color: #007aff; font-size: 14px; cursor: pointer; padding: 0 4px; }
 .route-switcher button:disabled { color: #ccc; }
-footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
+footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10; align-items: flex-end;}
 footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;min-height:42px;max-height:120px;line-height:20px;overflow-y:auto;transition:height 0.1s ease;}
-footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500}
+footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500; height:42px; flex-shrink:0;}
 footer button:disabled{opacity:.4}
 footer textarea:disabled { background: #f9f9f9; color: #999; }
 
@@ -77,8 +80,8 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   <header>
     <div class="header-avatar">{{ getAvatarChar(cfg.name) }}</div>
     <div class="title">{{ cfg.name || 'あいTalk' }}</div>
-    <button @click="showDiary = true" title="查看日记">&#128214; 日记</button>
-    <button @click="showSettings = !showSettings">&#9881; 设置</button>
+    <button @click="showDiary = true" title="查看日记">日记</button>
+    <button @click="showSettings = !showSettings">设置</button>
   </header>
 
   <div class="settings" v-if="showSettings">
@@ -86,8 +89,16 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <label>API Key<input v-model="cfg.apiKey" @change="save" type="password"></label>
     <label>模型名<input v-model="cfg.model" @change="save"></label>
     <label>角色名<input v-model="cfg.name" @change="save"></label>
-    <label>长期记忆 (TA会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入TA总结的回忆。"></textarea></label>
+    <label>长期记忆 (她会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入TA总结的回忆。"></textarea></label>
     <label>角色设定<textarea v-model="cfg.system" @change="save"></textarea></label>
+    
+    <!-- 🎯 数据备份与恢复 -->
+    <div class="btn-row">
+      <button class="btn-backup" @click="exportData">📥 导出备份</button>
+      <button class="btn-restore" @click="$refs.importFile.click()">📤 导入恢复</button>
+      <input type="file" ref="importFile" accept=".json" style="display:none" @change="importData">
+    </div>
+
     <button class="btn-clear" @click="clear">清空对话（重置记忆与时间线）</button>
   </div>
 
@@ -110,12 +121,12 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
         
         <div v-if="editingIndex !== i && !loading" class="action-btns">
           <div v-if="branches[i] && branches[i].list.length > 1" class="route-switcher">
-            <button @click="switchRoute(i, -1)">&#9664;</button>
+            <button @click="switchRoute(i, -1)">◀</button>
             <span>路线 {{ branches[i].active + 1 }} / {{ branches[i].list.length }}</span>
-            <button @click="switchRoute(i, 1)">&#9654;</button>
+            <button @click="switchRoute(i, 1)">▶</button>
           </div>
-          <button v-if="m.role === 'user'" @click="startEdit(i)" class="action-btn">&#9998; 修改</button>
-          <button v-if="i === messages.length - 1 && m.role === 'assistant'" @click="regenerate" class="action-btn">&#128260; 重新生成</button>
+          <button v-if="m.role === 'user'" @click="startEdit(i)" class="action-btn">修改</button>
+          <button v-if="i === messages.length - 1 && m.role === 'assistant'" @click="regenerate" class="action-btn">重新生成</button>
         </div>
       </div>
     </div>
@@ -129,7 +140,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
     <div class="diary-panel">
       <div class="diary-header">
-        <h3>&#128214; {{ cfg.name || 'AI' }} 的日记本</h3>
+        <h3>{{ cfg.name || 'AI' }} 的日记本</h3>
         <button @click="showDiary = false">关闭</button>
       </div>
       <div class="diary-list">
@@ -141,7 +152,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
       </div>
       <div class="diary-footer">
         <button class="btn-write-diary" @click="generateDiary" :disabled="isGeneratingDiary || loading">
-          {{ isGeneratingDiary ? '正在动笔写日记...' : '&#9997; 写今天的日记' }}
+          {{ isGeneratingDiary ? '正在动笔写日记...' : '写今天的日记' }}
         </button>
       </div>
     </div>
@@ -154,7 +165,6 @@ const { createApp, ref, nextTick, onMounted, onUnmounted } = Vue;
 
 createApp({
   setup() {
-    // 🎯 通用底层设定，强制使用 TA
     const defaultSystemPrompt = `你是一个正在与用户对话的 AI 助手。请严格按照用户在“角色设定”中填写的设定来扮演角色。
 【通用规则】
 1. 请使用“你”来称呼玩家。
@@ -175,7 +185,8 @@ createApp({
     const loading = ref(false);
     const isSummarizing = ref(false);
     const showSettings = ref(!cfg.value.apiKey);
-        const inputTextarea = ref(null);
+    const listEl = ref(null);
+    const inputTextarea = ref(null); // 🎯 输入框的引用
     
     const branches = ref(JSON.parse(localStorage.getItem('branches') || '{}'));
     const editingIndex = ref(-1);
@@ -187,12 +198,6 @@ createApp({
 
     let inactivityTimer = null;
     let secondMessageTimer = null;
-        const clearSecondMessageTimer = () => {
-      if (secondMessageTimer) {
-        clearTimeout(secondMessageTimer);
-        secondMessageTimer = null;
-      }
-    };
 
     const save = () => localStorage.setItem('cfg', JSON.stringify(cfg.value));
     const saveMessages = () => localStorage.setItem('messages', JSON.stringify(messages.value));
@@ -206,6 +211,67 @@ createApp({
       saveBranches();
       localStorage.removeItem('lastMessageTime'); 
       clearInactivityTimer();
+      clearSecondMessageTimer();
+      // 🎯 重置输入框高度
+      if (inputTextarea.value) {
+        inputTextarea.value.style.height = '42px';
+      }
+    };
+
+    // 🎯 自动调整输入框高度
+    const autoResize = () => {
+      const el = inputTextarea.value;
+      if (el) {
+        el.style.height = 'auto'; 
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+      }
+    };
+
+    // 🎯 导出数据（备份）
+    const exportData = () => {
+      const data = {
+        cfg: cfg.value,
+        messages: messages.value,
+        branches: branches.value,
+        diaryLogs: diaryLogs.value,
+        lastMessageTime: localStorage.getItem('lastMessageTime') || Date.now()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ai-talk-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert("导出成功！文件已保存。");
+    };
+
+    // 🎯 导入数据（恢复）
+    const importData = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!data.cfg || !data.messages) {
+            throw new Error("文件格式不对，缺少必要的数据。");
+          }
+          localStorage.setItem('cfg', JSON.stringify(data.cfg));
+          localStorage.setItem('messages', JSON.stringify(data.messages));
+          localStorage.setItem('branches', JSON.stringify(data.branches || {}));
+          localStorage.setItem('diaryLogs', JSON.stringify(data.diaryLogs || []));
+          if (data.lastMessageTime) localStorage.setItem('lastMessageTime', data.lastMessageTime);
+          alert("导入成功！页面即将刷新，你的记忆和日记都回来了。");
+          window.location.reload();
+        } catch (err) {
+          alert("导入失败：" + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = ''; 
     };
 
     const getAvatarChar = (name) => {
@@ -213,14 +279,6 @@ createApp({
       return name.trim().charAt(0).toUpperCase();
     };
 
-        // 🎯 新增：输入框自动增高逻辑
-    const autoResize = () => {
-      const el = inputTextarea.value;
-      if (el) {
-        el.style.height = 'auto'; // 先重置高度，才能算出真实的滚动高度
-        el.style.height = Math.min(el.scrollHeight, 120) + 'px'; // 限制最高120px，防止占满屏幕
-      }
-    };
     async function toBottom() {
       await nextTick();
       if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight;
@@ -353,12 +411,19 @@ ${recentChat}`;
       }
     };
 
+    const clearSecondMessageTimer = () => {
+      if (secondMessageTimer) {
+        clearTimeout(secondMessageTimer);
+        secondMessageTimer = null;
+      }
+    };
+
     const startInactivityTimer = () => {
       clearInactivityTimer();
       inactivityTimer = setTimeout(triggerInactivitySequence, 120000);
     };
 
-        async function triggerInactivitySequence() {
+    async function triggerInactivitySequence() {
       clearInactivityTimer();
       clearSecondMessageTimer();
       
@@ -372,7 +437,7 @@ ${recentChat}`;
 
       const promptForFirst = buildMessagesForAI([
         ...messages.value.slice(0, idx),
-        { role: 'user', content: '（系统提示：玩家已经有一段时间没有回复了。请你以角色身份，给 TA 发一条消息。表达你此刻的想法、感受，或者对刚才对话的思考。不要直接问 TA 在不在。动作描写要符合人设，大约 1-2 句话。不要输出其它多余内容。）' }
+        { role: 'user', content: '（系统提示：玩家已经有一段时间没有回复了。请你以角色身份，给 TA 发一条消息。表达你此刻的想法、感受，或者对刚才对话的思考。不要直接问 TA 在不在。动作描写和语气要完全符合你的人设，大约 1-2 句话。不要输出其它多余内容。）' }
       ]);
 
       try {
@@ -421,7 +486,7 @@ ${recentChat}`;
 
             const promptForSecond = buildMessagesForAI([
               ...messages.value.slice(0, newIdx),
-              { role: 'user', content: '（系统提示：玩家仍然没有回复你。请你以角色身份，再给 TA 发一条消息，问问 TA 在不在。语气要自然，可以带一点小心或者委屈，大约 1 句话。不要输出其它多余内容。）' }
+              { role: 'user', content: '（系统提示：玩家仍然没有回复你。请你以角色身份，再给 TA 发一条消息，问问 TA 在不在。语气要完全符合你的人设设定，大约 1 句话。不要输出其它多余内容。）' }
             ]);
 
             try {
@@ -616,7 +681,7 @@ ${recentChat}`;
 
       if (history.length === 0) {
         payloadMessages = buildMessagesForAI([
-          { role: 'user', content: '（系统提示：玩家刚刚打开了聊天界面，请你以角色身份主动打招呼。动作描写要符合人设。请使用“你”称呼玩家，用“TA”指代玩家。）' }
+          { role: 'user', content: '（系统提示：玩家刚刚打开了聊天界面，请你以角色身份主动打招呼。动作描写和语气要符合人设。请使用“你”称呼玩家，用“TA”指代玩家。）' }
         ]);
       } else {
         payloadMessages = buildMessagesForAI(history);
@@ -744,9 +809,14 @@ ${recentChat}`;
     async function send() {
       clearInactivityTimer();
       clearSecondMessageTimer();
+      
       const text = input.value.trim();
       if (!text || loading.value) return;
       input.value = '';
+      // 🎯 发送后重置输入框高度
+      if (inputTextarea.value) {
+        inputTextarea.value.style.height = '42px';
+      }
       
       messages.value.push({ role: 'user', content: text });
       const idx = messages.value.length;
@@ -798,7 +868,7 @@ ${recentChat}`;
       }
     }
 
-    return { cfg, messages, input, loading, showSettings, listEl, send, save, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, inputTextarea, autoResize }; 
+    return { cfg, messages, input, loading, showSettings, listEl, send, save, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, exportData, importData, inputTextarea, autoResize };
   }
 }).mount('#app');
 </script>
