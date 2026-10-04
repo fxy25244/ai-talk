@@ -86,7 +86,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <label>API Key<input v-model="cfg.apiKey" @change="save" type="password"></label>
     <label>模型名<input v-model="cfg.model" @change="save"></label>
     <label>角色名<input v-model="cfg.name" @change="save"></label>
-    <label>长期记忆 (她会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入她总结的回忆。"></textarea></label>
+    <label>长期记忆 (TA会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入TA总结的回忆。"></textarea></label>
     <label>角色设定<textarea v-model="cfg.system" @change="save"></textarea></label>
     <button class="btn-clear" @click="clear">清空对话（重置记忆与时间线）</button>
   </div>
@@ -122,7 +122,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   </main>
 
   <footer>
-    <textarea v-model="input" placeholder="说点什么…" @keydown.enter.exact.prevent="send" :disabled="loading"></textarea>
+    <textarea v-model="input" ref="inputTextarea" placeholder="说点什么…" @keydown.enter.exact.prevent="send" @input="autoResize" :disabled="loading"></textarea>
     <button @click="send" :disabled="loading">发送</button>
   </footer>
 
@@ -133,7 +133,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
         <button @click="showDiary = false">关闭</button>
       </div>
       <div class="diary-list">
-        <div v-if="diaryLogs.length === 0" class="diary-empty">还没有写过日记，快让她记录下今天的点滴吧～</div>
+        <div v-if="diaryLogs.length === 0" class="diary-empty">还没有写过日记，快让TA记录下今天的点滴吧～</div>
         <div v-for="log in diaryLogs" :key="log.timestamp" class="diary-item">
           <div class="diary-date">{{ log.date }}</div>
           <div class="diary-text">{{ log.content }}</div>
@@ -186,6 +186,13 @@ createApp({
     const isGeneratingDiary = ref(false);
 
     let inactivityTimer = null;
+    let secondMessageTimer = null;
+        const clearSecondMessageTimer = () => {
+      if (secondMessageTimer) {
+        clearTimeout(secondMessageTimer);
+        secondMessageTimer = null;
+      }
+    };
 
     const save = () => localStorage.setItem('cfg', JSON.stringify(cfg.value));
     const saveMessages = () => localStorage.setItem('messages', JSON.stringify(messages.value));
@@ -343,45 +350,110 @@ ${recentChat}`;
       inactivityTimer = setTimeout(triggerInactivitySequence, 120000);
     };
 
-    async function triggerInactivitySequence() {
+        async function triggerInactivitySequence() {
       clearInactivityTimer();
-      if (loading.value || !cfg.value.apiKey) return;
+      clearSecondMessageTimer();
       
+      const lastMsg = messages.value[messages.value.length - 1];
+      if (!lastMsg || lastMsg.role !== 'user') return;
+
       loading.value = true;
       const idx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '' });
       toBottom();
 
-      const promptForAI = buildMessagesForAI([
+      const promptForFirst = buildMessagesForAI([
         ...messages.value.slice(0, idx),
-        { role: 'user', content: '（系统提示：玩家已经有一段时间没有回复了。请你以角色身份，给 TA 发两条消息。\n第一条：表达你此刻的想法、感受，或者对刚才对话的思考。不要直接问 TA 在不在。动作描写要符合人设，大约 1-2 句话。\n第二条：问问 TA 在不在，语气要自然，可以带一点小心或者委屈，大约 1 句话。\n请严格使用 ---SPLIT--- 将两条消息分隔开，不要输出其它多余内容。）' }
+        { role: 'user', content: '（系统提示：玩家已经有一段时间没有回复了。请你以角色身份，给 TA 发一条消息。表达你此刻的想法、感受，或者对刚才对话的思考。不要直接问 TA 在不在。动作描写要符合人设，大约 1-2 句话。不要输出其它多余内容。）' }
       ]);
 
       try {
         const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
-          body: JSON.stringify({ model: cfg.value.model, stream: false, messages: promptForAI })
+          body: JSON.stringify({ model: cfg.value.model, stream: true, messages: promptForFirst })
         });
 
         if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
-        const data = await res.json();
-        const fullText = data.choices[0].message.content;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
 
-        const parts = fullText.split('---SPLIT---').map(s => s.trim()).filter(Boolean);
-        
-        if (parts.length >= 2) {
-          messages.value[idx].content = parts[0];
-          messages.value.push({ role: 'assistant', content: parts[1] });
-        } else {
-          messages.value[idx].content = fullText;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop(); 
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s.startsWith('data:')) continue;
+            const data = s.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+              if (delta) { messages.value[idx].content += delta; toBottom(); }
+            } catch (e) { }
+          }
         }
       } catch (e) {
-        messages.value[idx].content += '\n\n[出错] ' + e.message;
+        if (messages.value[idx]) messages.value[idx].content += '\n\n[出错] ' + e.message;
       } finally {
         loading.value = false;
         saveMessages();
         toBottom();
+
+        secondMessageTimer = setTimeout(async () => {
+          const latestMsg = messages.value[messages.value.length - 1];
+          if (latestMsg && latestMsg.role === 'assistant') {
+            loading.value = true;
+            const newIdx = messages.value.length;
+            messages.value.push({ role: 'assistant', content: '' });
+            toBottom();
+
+            const promptForSecond = buildMessagesForAI([
+              ...messages.value.slice(0, newIdx),
+              { role: 'user', content: '（系统提示：玩家仍然没有回复你。请你以角色身份，再给 TA 发一条消息，问问 TA 在不在。语气要自然，可以带一点小心或者委屈，大约 1 句话。不要输出其它多余内容。）' }
+            ]);
+
+            try {
+              const res = await fetch(cfg.value.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+                body: JSON.stringify({ model: cfg.value.model, stream: true, messages: promptForSecond })
+              });
+
+              if (!res.ok) throw new Error(res.status + ' ' + (await res.text()).slice(0, 200));
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+              let buf = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buf += decoder.decode(value, { stream: true });
+                const lines = buf.split('\n');
+                buf = lines.pop(); 
+                for (const line of lines) {
+                  const s = line.trim();
+                  if (!s.startsWith('data:')) continue;
+                  const data = s.slice(5).trim();
+                  if (data === '[DONE]') continue;
+                  try {
+                    const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+                    if (delta) { messages.value[newIdx].content += delta; toBottom(); }
+                  } catch (e) { }
+                }
+              }
+            } catch (e) {
+              if (messages.value[newIdx]) messages.value[newIdx].content += '\n\n[出错] ' + e.message;
+            } finally {
+              loading.value = false;
+              saveMessages();
+              toBottom();
+            }
+          }
+        }, 120000); 
       }
     }
 
@@ -495,6 +567,7 @@ ${recentChat}`;
         localStorage.setItem('lastMessageTime', Date.now());
         toBottom();
         autoSummarize();
+        clearSecondMessageTimer();
         startInactivityTimer();
       }
     };
@@ -657,9 +730,12 @@ ${recentChat}`;
 
     onUnmounted(() => {
       clearInactivityTimer();
+      clearSecondMessageTimer();
     });
 
     async function send() {
+      clearInactivityTimer();
+      clearSecondMessageTimer();
       const text = input.value.trim();
       if (!text || loading.value) return;
       input.value = '';
