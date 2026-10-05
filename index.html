@@ -427,8 +427,9 @@ ${recentChat}`;
       clearInactivityTimer();
       clearSecondMessageTimer();
       
-      const lastMsg = messages.value[messages.value.length - 1];
-      if (!lastMsg || lastMsg.role !== 'user') return;
+            // 只要距离用户上次发消息超过了2分钟（或者用户从未发过消息），就触发
+      const lastMessageTime = parseInt(localStorage.getItem('lastMessageTime')) || 0;
+      if (Date.now() - lastMessageTime < 2 * 60 * 1000) return;
 
       loading.value = true;
       const idx = messages.value.length;
