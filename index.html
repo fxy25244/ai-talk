@@ -89,7 +89,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <label>API Key<input v-model="cfg.apiKey" @change="save" type="password"></label>
     <label>模型名<input v-model="cfg.model" @change="save"></label>
     <label>角色名<input v-model="cfg.name" @change="save"></label>
-    <label>长期记忆 (她会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入TA总结的回忆。"></textarea></label>
+    <label>长期记忆 (TA会永远记住这些)<textarea v-model="cfg.memory" @change="save" placeholder="这里会自动填入TA总结的回忆。"></textarea></label>
     <label>角色设定<textarea v-model="cfg.system" @change="save"></textarea></label>
     
     <!-- 🎯 数据备份与恢复 -->
