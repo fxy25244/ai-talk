@@ -668,19 +668,45 @@ createApp({
       }, null, true, 'deepseek-chat');
     }
 
-    // ================= 情感基线提取 =================
+       // ================= 情感基线提取 =================
     async function generateBaselinePAD() {
       if (!cfg.value.apiKey) return alert("请先填写 API Key！");
       if (!cfg.value.system || cfg.value.system.trim() === '') return alert("请先填写角色设定！");
+      
       isGeneratingBaseline.value = true;
-      const prompt = [{ role: 'system', content: `你是专业的角色心理学分析师。阅读角色设定，分析其默认 PAD 基线。P(愉悦度), A(唤醒度/精力), D(支配度/强势)。输出 JSON: {"P": 0, "A": 0, "D": 0, "reason": "理由"}` }, { role: 'user', content: cfg.value.system }];
+      const prompt = [
+        { role: 'system', content: `你是专业的角色心理学分析师。阅读角色设定，分析其默认 PAD 基线。P(愉悦度), A(唤醒度/精力), D(支配度/强势)。输出严格 JSON: {"P": 0, "A": 0, "D": 0, "reason": "理由"}` }, 
+        { role: 'user', content: cfg.value.system }
+      ];
+
       await streamRequest(prompt, (jsonStr) => {
         try {
-          const result = JSON.parse(jsonStr.replace(/```json/g, '').replace(/```/g, '').trim());
+          console.log("PAD提取原始返回:", jsonStr); // 调试用
+
+          // 1. 拦截 API 报错
+          if (jsonStr.includes('[出错]')) {
+            throw new Error("API 报错，请检查 Key 或网络");
+          }
+
+          // 2. 暴力提取 JSON 内容（匹配第一个 { 到最后一个 } 之间的内容）
+          const match = jsonStr.match(/\{[\s\S]*\}/);
+          if (!match) throw new Error("模型未返回 JSON 结构，可能是网络问题或 API 报错。");
+          
+          const cleanJson = match[0];
+          const result = JSON.parse(cleanJson);
+          
+          // 3. 赋值并保存
           cfg.value.baselinePAD = { P: result.P || 0, A: result.A || 0, D: result.D || 0 };
-          saveCfg(); alert(`感知完毕：P:${result.P}, A:${result.A}, D:${result.D}\n理由：${result.reason}`);
-        } catch (e) { alert("感知失败"); }
-      }, () => { isGeneratingBaseline.value = false; }, true, 'deepseek-chat');
+          saveCfg(); 
+          
+          alert(`感知完毕：P:${cfg.value.baselinePAD.P}, A:${cfg.value.baselinePAD.A}, D:${cfg.value.baselinePAD.D}\n理由：${result.reason || '无'}`);
+        } catch (e) { 
+          console.error("解析失败详情:", e, jsonStr);
+          alert("感知失败！\n原因：" + e.message); 
+        }
+      }, () => { 
+        isGeneratingBaseline.value = false; 
+      }, true, 'deepseek-chat');
     }
 
     // ================= 其他辅助逻辑 =================
