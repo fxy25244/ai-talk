@@ -1,11 +1,10 @@
 {
   "name": "あいTalk",
-  "short_name": "あいTalk",
-  "description": "专属的 AI 角色扮演与陪伴软件",
+  "short_name": "Okako",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#e0f2fe",
+  "theme_color": "#f5f5f7",
   "icons": [
     {
       "src": "./icon-192.png",
