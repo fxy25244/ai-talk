@@ -275,11 +275,45 @@ createApp({
   setup() {
     const defaultSystemPrompt = `你是一个正在与用户对话的 AI 角色。请严格按照用户在“角色设定”中填写的设定来扮演角色。\n【通用规则】\n1. 请使用“你”来称呼玩家。\n2. 当需要指代玩家时，请务必使用中性代词“TA”，绝对不要擅自使用“他”或“她”。\n3. 如果玩家设定了称呼、性格、世界观，请绝对遵从。`;
 
-    // ================= IndexedDB 封装 =================
-    const { get, set, del } = idbKeyval;
-    const dbGet = async (key, def) => { const v = await get(key); return v !== undefined ? v : def; };
-    const dbSet = async (key, val) => { try { await set(key, val); } catch (e) { console.error(e); } };
-    const dbDel = async (key) => { try { await del(key); } catch (e) {} };
+    // ================= IndexedDB 封装 (修复 Proxy 存入报错) =================
+    const dbGet = async (key, def) => { 
+      try {
+        const v = await idbKeyval.get(key); 
+        return v !== undefined ? v : def; 
+      } catch(e) {
+        console.error("DB读取失败", e);
+        return def;
+      }
+    };
+    
+    // ✨ 核心修复：剥离 Vue 的 Proxy 代理，并把 Float32Array 转成普通数组
+    const deepUnwrap = (obj) => {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(deepUnwrap);
+      if (obj instanceof Float32Array) return Array.from(obj); 
+      
+      const raw = Vue.toRaw(obj); 
+      const res = {};
+      for (let k in raw) {
+        res[k] = deepUnwrap(raw[k]);
+      }
+      return res;
+    };
+
+    const dbSet = async (key, val) => { 
+      try { 
+        const plainVal = deepUnwrap(val);
+        await idbKeyval.set(key, plainVal); 
+      } catch (e) { 
+        console.error("DB写入失败", key, e); 
+      } 
+    };
+    
+    const dbDel = async (key) => { 
+      try { await idbKeyval.del(key); } catch (e) {
+        console.error("DB删除失败", e);
+      } 
+    };
 
     // ================= 核心状态 =================
     const roleList = ref([]);
@@ -290,7 +324,7 @@ createApp({
     const messages = ref([]);
     const branches = ref({});
     const diaryLogs = ref([]);
-    const memoryBank = ref([]); // 向量记忆库
+    const memoryBank = ref([]); 
 
     const input = ref('');
     const loading = ref(false);
@@ -309,7 +343,7 @@ createApp({
     let loadingTimer = null;
     let inactivityTimer = null;
     let secondMessageTimer = null;
-    let padTickTimer = null; // 情绪心跳定时器
+    let padTickTimer = null; 
     
     let extractor = null;
 
@@ -322,7 +356,7 @@ createApp({
       const prevMsg = messages.value[index - 1];
       if (!currentMsg.timestamp || !prevMsg.timestamp) return false;
       const gap = currentMsg.timestamp - prevMsg.timestamp;
-      return gap > 4 * 60 * 1000; // 超过 4 分钟才显示
+      return gap > 4 * 60 * 1000; 
     }
 
     function formatTime(timestamp) {
@@ -371,7 +405,6 @@ createApp({
       
       messages.value = await dbGet(getKey('messages'), []);
       
-      // 兼容老数据的时间戳
       let needsSave = false;
       let mockTime = Date.now() - (messages.value.length * 60000);
       messages.value.forEach(m => {
@@ -459,7 +492,7 @@ createApp({
       if (!extractor) await initEmbeddingModel();
       if (!extractor) return new Float32Array(384);
       const output = await extractor(text, { pooling: 'mean', normalize: true });
-      return output.data;
+      return Array.from(output.data); // 直接返回普通数组
     }
 
     function dotProduct(vecA, vecB) {
@@ -499,7 +532,6 @@ createApp({
       if (isSummarizing.value || loading.value || messages.value.length < 15) return;
       isSummarizing.value = true;
       
-      // 注意：这里不删除 messages，永远保留在本地 UI！
       const toExtract = messages.value.slice(-12);
       
       const prompt = [
@@ -523,7 +555,7 @@ createApp({
               });
             }
             saveMemoryBank();
-            cleanMemoryBank(); // 只清理向量记忆库，不动聊天记录
+            cleanMemoryBank(); 
           }
         } catch (e) { console.error("提取记忆失败", e); }
       }, () => { isSummarizing.value = false; }, true, 'deepseek-chat');
@@ -620,15 +652,13 @@ createApp({
       } catch (e) { onDelta('\n\n[出错] ' + e.message); } finally { onFinish && onFinish(); }
     }
 
-    // ================= 导演 & 演员 核心流程（强截断防溢出） =================
+    // ================= 导演 & 演员 核心流程 =================
     async function performDirectorAndActor(userText, aiIdx, onComplete) {
       const pad = getPAD();
       const timeString = getCurrentTimeString();
       const charName = cfg.value.name || 'AI';
       
       const recalledMemory = await searchMemories(userText);
-
-      // 导演上下文：极简 3 条
       const recentForDirector = messages.value.slice(0, aiIdx).slice(-3).map(m => `${m.role === 'user' ? 'TA' : charName}: ${m.content}`).join('\n');
 
       const directorPrompt = [
@@ -639,7 +669,9 @@ createApp({
       await streamRequest(directorPrompt, (jsonStr) => {
         let result = { delta_PAD: {}, occ_emotion: "微澜", occ_reason: "心底泛起涟漪", director_script: "你心里泛起波澜，不知怎么回应。" };
         try {
-          result = JSON.parse(jsonStr.replace(/```json/g, '').replace(/```/g, '').trim());
+          const match = jsonStr.match(/\{[\s\S]*\}/);
+          if (match) result = JSON.parse(match[0]);
+          
           let newPad = { P: pad.P + (result.delta_PAD?.P || 0), A: pad.A + (result.delta_PAD?.A || 0), D: pad.D + (result.delta_PAD?.D || 0) };
           localStorage.setItem(getKey('ai_pad'), JSON.stringify(newPad));
           messages.value[aiIdx].occ_emotion = result.occ_emotion;
@@ -647,7 +679,6 @@ createApp({
         
         const subconsciousWhisper = `你感到一阵【${result.occ_emotion}】，因为${result.occ_reason}。你的身体不由得做出了反应：${result.director_script}`;
         
-        // 演员上下文：截取最近 10 条历史，防止 Token 爆炸
         const actorHistory = messages.value.slice(0, aiIdx).slice(-10).map(m => ({ role: m.role, content: m.content }));
 
         const actorPrompt = [
@@ -668,7 +699,7 @@ createApp({
       }, null, true, 'deepseek-chat');
     }
 
-       // ================= 情感基线提取 =================
+    // ================= 情感基线提取 (已加入容错) =================
     async function generateBaselinePAD() {
       if (!cfg.value.apiKey) return alert("请先填写 API Key！");
       if (!cfg.value.system || cfg.value.system.trim() === '') return alert("请先填写角色设定！");
@@ -681,32 +712,18 @@ createApp({
 
       await streamRequest(prompt, (jsonStr) => {
         try {
-          console.log("PAD提取原始返回:", jsonStr); // 调试用
-
-          // 1. 拦截 API 报错
-          if (jsonStr.includes('[出错]')) {
-            throw new Error("API 报错，请检查 Key 或网络");
-          }
-
-          // 2. 暴力提取 JSON 内容（匹配第一个 { 到最后一个 } 之间的内容）
+          if (jsonStr.includes('[出错]')) throw new Error("API 报错，请检查 Key 或网络");
           const match = jsonStr.match(/\{[\s\S]*\}/);
-          if (!match) throw new Error("模型未返回 JSON 结构，可能是网络问题或 API 报错。");
+          if (!match) throw new Error("模型未返回 JSON 结构");
           
-          const cleanJson = match[0];
-          const result = JSON.parse(cleanJson);
-          
-          // 3. 赋值并保存
+          const result = JSON.parse(match[0]);
           cfg.value.baselinePAD = { P: result.P || 0, A: result.A || 0, D: result.D || 0 };
           saveCfg(); 
-          
           alert(`感知完毕：P:${cfg.value.baselinePAD.P}, A:${cfg.value.baselinePAD.A}, D:${cfg.value.baselinePAD.D}\n理由：${result.reason || '无'}`);
         } catch (e) { 
-          console.error("解析失败详情:", e, jsonStr);
           alert("感知失败！\n原因：" + e.message); 
         }
-      }, () => { 
-        isGeneratingBaseline.value = false; 
-      }, true, 'deepseek-chat');
+      }, () => { isGeneratingBaseline.value = false; }, true, 'deepseek-chat');
     }
 
     // ================= 其他辅助逻辑 =================
@@ -750,7 +767,6 @@ createApp({
       return `${year}年${month}月${date}日 ${day} ${period}${hours}:${minutes}`;
     };
 
-    // 被动问候截断函数
     const buildMessagesForAI = (historyMessages, maxTurns = 15) => {
       const recentHistory = historyMessages.slice(-maxTurns).map(m => ({ role: m.role, content: m.content }));
       let systemPrompt = cfg.value.system;
@@ -839,7 +855,7 @@ createApp({
       
       const oldTimeline = JSON.parse(JSON.stringify(messages.value));
       messages.value[index].content = newText;
-      messages.value[index].timestamp = Date.now(); // 更新修改时间
+      messages.value[index].timestamp = Date.now();
       messages.value = messages.value.slice(0, index + 1);
       editingIndex.value = -1; editInput.value = ''; loading.value = true; saveMessages();
       
@@ -924,7 +940,6 @@ createApp({
       getPAD();
       initEmbeddingModel();
       
-      // ✨ 启动挂机情绪心跳，每 60 秒结算一次
       if (padTickTimer) clearInterval(padTickTimer);
       padTickTimer = setInterval(tickPAD, 60000);
 
@@ -1025,7 +1040,7 @@ createApp({
       exportData, importData, expandedReasoning,
       generateBaselinePAD, isGeneratingBaseline,
       showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole,
-      showTimeDivider, formatTime // ✨ 暴露时间函数
+      showTimeDivider, formatTime 
     };
   }
 }).mount('#app');
