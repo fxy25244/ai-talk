@@ -1,6 +1,6 @@
 {
   "name": "あいTalk",
-  "short_name": "Okako",
+  "short_name": "あいTalk",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
