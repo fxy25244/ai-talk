@@ -1,21 +1,21 @@
-const CACHE_NAME = 'aitalk-cache-v5';
+const CACHE_NAME = 'aitalk-cache-v6'; // 🚨 一定要升级版本号
 const urlsToCache = [
-  './index.html'
+  './index.html',
+  'https://unpkg.com/vue@3/dist/vue.global.prod.js',
+  'https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/dist/umd.js',
+  'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js'
 ];
 
-// 安装阶段：立刻接管，不让它等
 self.addEventListener('install', event => {
   self.skipWaiting(); 
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(urlsToCache);
-    }).catch(err => {
-      console.error('缓存失败，但不影响核心功能:', err);
+      // 用 allSettled 防止某个 CDN 抽风导致整个 PWA 挂掉
+      return Promise.allSettled(urlsToCache.map(url => cache.add(url)));
     })
   );
 });
 
-// 激活阶段：清理旧缓存
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -30,14 +30,20 @@ self.addEventListener('activate', event => {
   );
 });
 
-// 拦截请求阶段：更稳健的断网降级
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    }).catch(() => {
-      return new Response('网络似乎断了，但我还在这里。', {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+      if (response) return response;
+      return fetch(event.request).catch(() => {
+        // 如果你在断网时刷新了页面，兜底返回缓存的 index.html
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        return new Response('网络似乎断了，但我还在这里。', {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
       });
     })
   );
