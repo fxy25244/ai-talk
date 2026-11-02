@@ -187,7 +187,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   <main ref="listEl">
     <template v-for="(m,i) in messages" :key="i">
       
-      <!-- ✨ 时间分割线 (超过 4 分钟才显示) -->
+      <!-- 时间分割线 -->
       <div v-if="showTimeDivider(i)" class="time-divider">
         {{ formatTime(m.timestamp) }}
       </div>
@@ -241,8 +241,8 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   </main>
 
   <footer>
-    <textarea v-model="input" placeholder="说点什么…" @keydown.enter.exact.prevent="send" :disabled="loading"></textarea>
-    <button @click="send" :disabled="loading">发送</button>
+    <textarea v-model="input" placeholder="说点什么…" @keydown.enter.exact.prevent="send" :disabled="loading || !isAppReady"></textarea>
+    <button @click="send" :disabled="loading || !isAppReady">发送</button>
   </footer>
 
   <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
@@ -275,7 +275,7 @@ createApp({
   setup() {
     const defaultSystemPrompt = `你是一个正在与用户对话的 AI 角色。请严格按照用户在“角色设定”中填写的设定来扮演角色。\n【通用规则】\n1. 请使用“你”来称呼玩家。\n2. 当需要指代玩家时，请务必使用中性代词“TA”，绝对不要擅自使用“他”或“她”。\n3. 如果玩家设定了称呼、性格、世界观，请绝对遵从。`;
 
-    // ================= IndexedDB 封装 (修复 Proxy 存入报错) =================
+    // ================= IndexedDB 封装 (深度解包，解决 Proxy 报错) =================
     const dbGet = async (key, def) => { 
       try {
         const v = await idbKeyval.get(key); 
@@ -286,7 +286,6 @@ createApp({
       }
     };
     
-    // ✨ 核心修复：剥离 Vue 的 Proxy 代理，并把 Float32Array 转成普通数组
     const deepUnwrap = (obj) => {
       if (obj === null || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(deepUnwrap);
@@ -310,15 +309,14 @@ createApp({
     };
     
     const dbDel = async (key) => { 
-      try { await idbKeyval.del(key); } catch (e) {
-        console.error("DB删除失败", e);
-      } 
+      try { await idbKeyval.del(key); } catch (e) { console.error("DB删除失败", e); } 
     };
 
     // ================= 核心状态 =================
     const roleList = ref([]);
     const activeRoleId = ref(null);
     const showSidebar = ref(false);
+    const isAppReady = ref(false); // ✨ 加载锁：确保数据读完前不能操作
 
     const cfg = ref({ apiKey: '', name: '新角色', system: defaultSystemPrompt, baselinePAD: { P: 20, A: -20, D: -30 } });
     const messages = ref([]);
@@ -410,30 +408,30 @@ createApp({
       messages.value.forEach(m => {
         if (!m.timestamp) { m.timestamp = mockTime; mockTime += 60000; needsSave = true; }
       });
-      if (needsSave) saveMessages();
+      if (needsSave) await saveMessages();
 
       branches.value = await dbGet(getKey('branches'), {});
       diaryLogs.value = await dbGet(getKey('diaryLogs'), []);
       memoryBank.value = await dbGet(getKey('memoryBank'), []);
     }
 
-    // ================= 保存逻辑 =================
-    const saveCfg = () => {
-      dbSet(getKey('cfg'), cfg.value);
+    // ================= 保存逻辑 (全面异步化) =================
+    const saveCfg = async () => {
+      await dbSet(getKey('cfg'), cfg.value);
       const r = roleList.value.find(r => r.id === activeRoleId.value);
       if (r) { r.name = cfg.value.name; localStorage.setItem('role_list', JSON.stringify(roleList.value)); }
     };
-    const saveMessages = () => dbSet(getKey('messages'), messages.value);
-    const saveBranches = () => dbSet(getKey('branches'), branches.value);
-    const saveDiary = () => dbSet(getKey('diaryLogs'), diaryLogs.value);
-    const saveMemoryBank = () => dbSet(getKey('memoryBank'), memoryBank.value);
+    const saveMessages = async () => await dbSet(getKey('messages'), messages.value);
+    const saveBranches = async () => await dbSet(getKey('branches'), branches.value);
+    const saveDiary = async () => await dbSet(getKey('diaryLogs'), diaryLogs.value);
+    const saveMemoryBank = async () => await dbSet(getKey('memoryBank'), memoryBank.value);
 
     // ================= 角色管理 =================
     const switchRole = async (id) => {
       if (id === activeRoleId.value) { showSidebar.value = false; return; }
       if (loading.value) return alert("正在回复中，请稍等...");
       
-      saveCfg(); saveMessages(); saveBranches(); saveDiary(); saveMemoryBank();
+      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
       activeRoleId.value = id;
       localStorage.setItem('active_role_id', id);
       
@@ -450,7 +448,7 @@ createApp({
 
     const addNewRole = async () => {
       if (loading.value) return alert("正在回复中，请稍等...");
-      saveCfg(); saveMessages(); saveBranches(); saveDiary(); saveMemoryBank();
+      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
       
       const newId = Date.now().toString();
       roleList.value.push({ id: newId, name: '新角色' });
@@ -492,7 +490,7 @@ createApp({
       if (!extractor) await initEmbeddingModel();
       if (!extractor) return new Float32Array(384);
       const output = await extractor(text, { pooling: 'mean', normalize: true });
-      return Array.from(output.data); // 直接返回普通数组
+      return Array.from(output.data);
     }
 
     function dotProduct(vecA, vecB) {
@@ -521,7 +519,7 @@ createApp({
           const target = memoryBank.value.find(m => m.id === vm.id);
           if (target) target.lastAccessed = now;
         });
-        saveMemoryBank();
+        await saveMemoryBank();
         return valid.map(m => `- ${m.content}`).join('\n');
       }
       return "暂无相关记忆。";
@@ -554,7 +552,7 @@ createApp({
                 lastAccessed: Date.now()
               });
             }
-            saveMemoryBank();
+            await saveMemoryBank();
             cleanMemoryBank(); 
           }
         } catch (e) { console.error("提取记忆失败", e); }
@@ -691,15 +689,15 @@ createApp({
         streamRequest(actorPrompt, (delta) => {
           if (messages.value[aiIdx].content === '') stopLoadingText();
           messages.value[aiIdx].content += delta; toBottom();
-        }, () => {
-          stopLoadingText(); loading.value = false; saveMessages();
+        }, async () => {
+          stopLoadingText(); loading.value = false; await saveMessages();
           localStorage.setItem(getKey('lastMessageTime'), Date.now());
           toBottom(); extractMemories(); startInactivityTimer(); onComplete && onComplete();
         }, false, 'deepseek-reasoner', (reasoningDelta) => { messages.value[aiIdx].reasoning += reasoningDelta; });
       }, null, true, 'deepseek-chat');
     }
 
-    // ================= 情感基线提取 (已加入容错) =================
+    // ================= 情感基线提取 =================
     async function generateBaselinePAD() {
       if (!cfg.value.apiKey) return alert("请先填写 API Key！");
       if (!cfg.value.system || cfg.value.system.trim() === '') return alert("请先填写角色设定！");
@@ -727,10 +725,10 @@ createApp({
     }
 
     // ================= 其他辅助逻辑 =================
-    const clear = () => { 
+    const clear = async () => { 
       if(!confirm("确定清空当前角色的对话吗？")) return;
       messages.value = []; branches.value = []; memoryBank.value = [];
-      saveMessages(); saveBranches(); saveMemoryBank();
+      await saveMessages(); await saveBranches(); await saveMemoryBank();
       localStorage.removeItem(getKey('lastMessageTime')); 
       localStorage.removeItem(getKey('ai_pad'));
       clearInactivityTimer(); clearSecondMessageTimer();
@@ -755,7 +753,7 @@ createApp({
         const now = new Date(); const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
         diaryLogs.value = diaryLogs.value.filter(log => log.date !== dateStr);
         diaryLogs.value.unshift({ date: dateStr, content: data.choices[0].message.content, timestamp: Date.now() });
-        saveDiary(); alert("日记写好啦！");
+        await saveDiary(); alert("日记写好啦！");
       } catch (e) { alert("写日记失败了：" + e.message); } finally { isGeneratingDiary.value = false; }
     }
 
@@ -809,7 +807,7 @@ createApp({
       } catch (e) {
         if (messages.value[idx]) messages.value[idx].content += '\n\n[出错] ' + e.message;
       } finally {
-        loading.value = false; saveMessages(); toBottom();
+        loading.value = false; await saveMessages(); toBottom();
         secondMessageTimer = setTimeout(async () => {
           const latestMsg = messages.value[messages.value.length - 1];
           if (latestMsg && latestMsg.role === 'assistant' && !loading.value) {
@@ -839,7 +837,7 @@ createApp({
             } catch (e) {
               if (messages.value[newIdx]) messages.value[newIdx].content += '\n\n[出错] ' + e.message;
             } finally {
-              loading.value = false; saveMessages(); toBottom();
+              loading.value = false; await saveMessages(); toBottom();
             }
           }
         }, 120000);
@@ -857,40 +855,40 @@ createApp({
       messages.value[index].content = newText;
       messages.value[index].timestamp = Date.now();
       messages.value = messages.value.slice(0, index + 1);
-      editingIndex.value = -1; editInput.value = ''; loading.value = true; saveMessages();
+      editingIndex.value = -1; editInput.value = ''; loading.value = true; await saveMessages();
       
       const aiIdx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
       
       const pad = getPAD(); startLoadingText(pad);
-      await performDirectorAndActor(newText, aiIdx, () => {
+      await performDirectorAndActor(newText, aiIdx, async () => {
         const newTimeline = JSON.parse(JSON.stringify(messages.value));
         if (!branches.value[index]) branches.value[index] = { active: 0, list: [oldTimeline] };
         branches.value[index].list.push(newTimeline);
         if (branches.value[index].list.length > 5) { branches.value[index].list.shift(); }
         branches.value[index].active = branches.value[index].list.length - 1;
-        saveBranches(); saveMessages();
+        await saveBranches(); await saveMessages();
       });
     };
 
-    const switchRoute = (index, direction) => {
+    const switchRoute = async (index, direction) => {
       if (loading.value) return; const branch = branches.value[index]; if (!branch) return;
       let newActive = branch.active + direction;
       if (newActive < 0) newActive = branch.list.length - 1;
       if (newActive >= branch.list.length) newActive = 0;
       branch.active = newActive; messages.value = JSON.parse(JSON.stringify(branch.list[newActive]));
-      saveMessages(); saveBranches(); toBottom();
+      await saveMessages(); await saveBranches(); toBottom();
     };
 
     async function regenerate() {
       if (loading.value || messages.value.length === 0) return;
       const lastMsg = messages.value[messages.value.length - 1]; if (lastMsg.role !== 'assistant') return;
-      messages.value.pop(); loading.value = true; saveMessages(); toBottom();
+      messages.value.pop(); loading.value = true; await saveMessages(); toBottom();
       const userText = messages.value[messages.value.length - 1]?.content || "（主动打招呼）";
       const aiIdx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() });
       const pad = getPAD(); startLoadingText(pad);
-      await performDirectorAndActor(userText, aiIdx, () => { saveMessages(); });
+      await performDirectorAndActor(userText, aiIdx, async () => { await saveMessages(); });
     }
 
     async function triggerGreeting() {
@@ -931,7 +929,7 @@ createApp({
       } catch (e) {
         messages.value[idx].content += '\n\n[出错] ' + e.message;
       } finally {
-        loading.value = false; saveMessages(); localStorage.setItem(getKey('lastMessageTime'), Date.now()); toBottom(); startInactivityTimer();
+        loading.value = false; await saveMessages(); localStorage.setItem(getKey('lastMessageTime'), Date.now()); toBottom(); startInactivityTimer();
       }
     }
 
@@ -942,6 +940,8 @@ createApp({
       
       if (padTickTimer) clearInterval(padTickTimer);
       padTickTimer = setInterval(tickPAD, 60000);
+
+      isAppReady.value = true; // ✨ 加载完毕解锁
 
       if (cfg.value.apiKey) checkAndTriggerGreeting();
       document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -969,7 +969,7 @@ createApp({
       }
     };
 
-    // ✨ 全量级系统备份与恢复
+    // ================= 全量级系统备份与恢复 =================
     const exportData = async () => {
       try {
         const backup = { roleList: roleList.value, activeRoleId: activeRoleId.value, rolesData: {} };
@@ -1020,6 +1020,8 @@ createApp({
     };
 
     async function send() {
+      if (!isAppReady.value) return alert("数据加载中，请稍等...");
+      
       const text = input.value.trim(); if (!text || loading.value) return;
       if (text.length > 2000) return alert("你的话太长啦，AI 可能记不住，请分段发送。");
       
@@ -1027,9 +1029,10 @@ createApp({
       messages.value.push({ role: 'user', content: text, timestamp: Date.now() });
       const aiIdx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() });
-      loading.value = true; saveMessages(); toBottom();
+      loading.value = true; await saveMessages(); toBottom();
+      
       const pad = getPAD(); startLoadingText(pad);
-      await performDirectorAndActor(text, aiIdx, () => { saveMessages(); });
+      await performDirectorAndActor(text, aiIdx, async () => { await saveMessages(); });
     }
 
     return { 
@@ -1040,7 +1043,7 @@ createApp({
       exportData, importData, expandedReasoning,
       generateBaselinePAD, isGeneratingBaseline,
       showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole,
-      showTimeDivider, formatTime 
+      showTimeDivider, formatTime, isAppReady
     };
   }
 }).mount('#app');
