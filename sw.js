@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aitalk-cache-v7'; // 🚨 一定要升级版本号
+const CACHE_NAME = 'aitalk-cache-v8'; // 🚨 一定要升级版本号
 const urlsToCache = [
   './index.html',
   'https://unpkg.com/vue@3/dist/vue.global.prod.js',
