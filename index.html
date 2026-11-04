@@ -22,15 +22,11 @@
 html,body{height:100%}
 body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f5f5f7}
 #app{height:100vh;height:100dvh;display:flex;flex-direction:column;max-width:600px;margin:0 auto;background:#fff;position:relative;overflow:hidden}
-
-/* 头部 */
 header{display:flex;align-items:center;gap:10px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));border-bottom:1px solid #eee;background:#fff;z-index:10}
 .header-avatar{width:32px;height:32px;border-radius:50%;background:#e0f2fe;color:#0369a1;display:flex;justify-content:center;align-items:center;font-size:14px;font-weight:600;flex-shrink:0;cursor:pointer;user-select:none;transition:all 0.2s}
 header .title{flex:1;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header button{background:none;border:none;font-size:14px;color:#555;cursor:pointer;padding:4px 8px;border-radius:6px}
 header button:hover{background:#f0f0f0}
-
-/* 侧边栏 */
 .sidebar-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 50; display: flex; }
 .sidebar { width: 260px; height: 100%; background: #fff; display: flex; flex-direction: column; animation: slideIn 0.3s ease-out; box-shadow: 2px 0 12px rgba(0,0,0,0.1); }
 @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
@@ -44,8 +40,6 @@ header button:hover{background:#f0f0f0}
 .role-item .avatar { width: 28px; height: 28px; border-radius: 50%; background: #eee; display: flex; justify-content: center; align-items: center; font-size: 12px; }
 .role-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-add-role { margin: 16px; padding: 12px; background: #f0f8ff; color: #007aff; border: 1px dashed #007aff; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
-
-/* 设置面板 */
 .settings{padding:12px 16px;background:#fafafa;border-bottom:1px solid #eee;display:flex;flex-direction:column;gap:8px;max-height:75vh;overflow-y:auto;z-index:20;position:absolute;top:60px;left:0;right:0;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
 .settings label{display:flex;flex-direction:column;font-size:12px;color:#666;gap:4px}
 .settings input,.settings textarea{padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
@@ -54,43 +48,30 @@ header button:hover{background:#f0f0f0}
 .settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;flex:1;margin-top:4px}
 .settings .btn-backup{padding:8px;border:none;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:14px;cursor:pointer;flex:1}
 .settings .btn-restore{padding:8px;border:none;border-radius:8px;background:#fff3e0;color:#e65100;font-size:14px;cursor:pointer;flex:1}
-
-/* 聊天区 */
 main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .msg{display:flex;width:100%;}
 .msg.user{justify-content:flex-end}
 .msg.assistant{justify-content:flex-start}
 .bubble-container { display: flex; flex-direction: column; max-width: 75%; }
 .msg.user .bubble-container { align-items: flex-end; }
-
-/* 头像与抖动 */
 .char-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #f0f4f8; color: #475569; display: flex; justify-content: center; align-items: center; font-size: 16px; font-weight: 600; flex-shrink: 0; margin-top: 4px; margin-right: 8px; user-select: none; cursor:pointer; transition: all 0.3s ease; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px) rotate(-5deg)} 50%{transform:translateX(4px) rotate(5deg)} 75%{transform:translateX(-4px) rotate(-5deg)} }
 .poke-anim { animation: shake 0.4s ease-in-out; }
-
-/* 气泡 */
 .bubble{min-width: 60px;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.05);text-align:left;position:relative}
 .msg.user .bubble{background:#007aff;color:#fff;border-bottom-right-radius:4px}
 .msg.assistant .bubble{background:#f0f0f2;color:#111;border-bottom-left-radius:4px}
-
-/* 时间与戳一戳 */
 .time-divider { text-align: center; font-size: 12px; color: #b0b0b0; margin: 16px 0 8px 0; user-select: none; }
 .poke-tip { text-align: center; font-size: 12px; color: #999; margin: 8px 0; user-select: none; }
-
-/* 加载与读心术 */
 .loading-text { color: #888; font-style: italic; }
 .typing-dots span { animation: blink 1.4s infinite both; }
 .typing-dots span:nth-child(2) { animation-delay: .2s; }
 .typing-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
-
 .reasoning-container { margin-top: 6px; width: 100%; }
 .reasoning-toggle { background: none; border: none; font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; transition: color 0.2s; text-align: left;}
 .reasoning-toggle:hover { color: #007aff; }
 .reasoning-content { background: #fafafa; border-left: 3px solid #e0e0e0; padding: 8px 12px; border-radius: 4px 8px 8px 4px; font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; }
 .occ-badge { display:inline-block; font-size: 10px; color: #999; border: 1px solid #ddd; border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: text-bottom; }
-
-/* 操作栏 */
 .edit-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .edit-box textarea { width: 100%; padding: 10px; border: 1px solid #007aff; border-radius: 12px; font-size: 15px; font-family: inherit; resize: vertical; min-height: 60px; }
 .edit-btns { display: flex; gap: 8px; justify-content: flex-end; }
@@ -102,15 +83,11 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .action-btn:hover { background: #f0f0f0; color: #333; }
 .route-switcher { display: flex; align-items: center; gap: 6px; background: #f0f8ff; border: 1px solid #cce5ff; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #007aff; }
 .route-switcher button { background: none; border: none; color: #007aff; font-size: 14px; cursor: pointer; padding: 0 4px; }
-
-/* 底部输入 */
 footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
 footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;height:42px;line-height:20px}
 footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500}
 footer button:disabled{opacity:.4}
 footer textarea:disabled { background: #f9f9f9; color: #999; }
-
-/* 日记本 */
 .diary-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
 .diary-panel { width: 100%; height: 80%; background: #fff; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: slideUp 0.3s ease-out; overflow: hidden; max-width: 600px; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -123,11 +100,8 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
 .diary-date { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; }
 .diary-text { font-size: 14px; line-height: 1.7; color: #333; white-space: pre-wrap; }
 .diary-footer { padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #eee; background: #fff; display: flex; justify-content: center; }
-.btn-write-diary { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.btn-write-diary:disabled { opacity: 0.5; background: #ccc; }
-</style>
-</head>
-<body>
+.btn-write-diary { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size
+                  <body>
 <div id="app" v-cloak>
   <header>
     <div class="header-avatar" @click="showSidebar = true">{{ getAvatarChar(cfg.name) }}</div>
@@ -136,7 +110,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <button @click="showSettings = !showSettings">&#9881; 设置</button>
   </header>
 
-  <!-- 角色列表侧边栏 -->
   <div v-if="showSidebar" class="sidebar-overlay" @click.self="showSidebar = false">
     <div class="sidebar">
       <div class="sidebar-header"><h3>所有角色</h3><button @click="showSidebar = false">&times;</button></div>
@@ -150,7 +123,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     </div>
   </div>
 
-  <!-- 设置面板 -->
   <div class="settings" v-if="showSettings">
     <label>DeepSeek API Key (必填)<input v-model="cfg.apiKey" @change="saveCfg" type="password" placeholder="sk-..."></label>
     <label>角色名<input v-model="cfg.name" @change="saveCfg" placeholder="例：Okako"></label>
@@ -169,7 +141,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
       <label style="flex:1;">支配度 D<input type="number" v-model.number="cfg.baselinePAD.D" @change="saveCfg" min="-100" max="100"></label>
     </div>
     
-    <!-- 实时状态监控面板 -->
     <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #ddd; font-size:12px; display:flex; flex-direction:column; gap:8px; margin-top:4px;">
       <div style="display:flex; justify-content:space-between; color:#666;">
         <span>实时 P: {{ currentPAD.P.toFixed(1) }}</span>
@@ -198,17 +169,12 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
 
   <main ref="listEl">
     <template v-for="(m,i) in messages" :key="i">
-      <!-- 时间分割线 -->
       <div v-if="showTimeDivider(i)" class="time-divider">{{ formatTime(m.timestamp) }}</div>
-
-      <!-- 戳一戳系统提示 -->
       <div v-if="m.isPoke" class="poke-tip">{{ m.content }}</div>
-
       <div v-else :class="['msg', m.role]">
         <div v-if="m.role === 'assistant'" class="char-avatar" :class="{ 'poke-anim': isPoking }" @click="pokeAI">
           {{ getAvatarChar(cfg.name) }}
         </div>
-        
         <div class="bubble-container">
           <div v-if="editingIndex === i" class="edit-box">
             <textarea v-model="editInput"></textarea>
@@ -217,7 +183,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
               <button class="btn-save" @click="saveEdit(i)">保存并重新生成</button>
             </div>
           </div>
-          
           <div v-else class="bubble">
             <span v-if="m.content" v-html="formatText(m.content)"></span>
             <span v-else-if="loading && i === messages.length - 1" class="loading-text">
@@ -226,15 +191,12 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
             <span v-else>...</span>
             <span v-if="m.occ_emotion && m.content" class="occ-badge">{{ m.occ_emotion }}</span>
           </div>
-
-          <!-- 读心术 -->
           <div v-if="m.reasoning" class="reasoning-container">
             <button class="reasoning-toggle" @click="expandedReasoning = expandedReasoning === i ? -1 : i">
               {{ expandedReasoning === i ? '🫧 收起内心戏' : '🫧 偷看内心戏' }}
             </button>
             <div v-show="expandedReasoning === i" class="reasoning-content">{{ m.reasoning }}</div>
           </div>
-          
           <div v-if="editingIndex !== i && !loading" class="action-btns">
             <div v-if="branches[i] && branches[i].list.length > 1" class="route-switcher">
               <button @click="switchRoute(i, -1)">&#9664;</button>
@@ -248,8 +210,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
       </div>
     </template>
   </main>
-
-  <footer>
+    <footer>
     <textarea v-model="input" placeholder="说点什么…（支持括号包动作，如：摸了摸头）" @keydown.enter.exact.prevent="send" :disabled="loading || !isAppReady"></textarea>
     <button @click="send" :disabled="loading || !isAppReady">发送</button>
   </footer>
@@ -276,12 +237,10 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script>
 const { createApp, ref, nextTick, onMounted, onUnmounted } = Vue;
-
-createApp({
+           createApp({
   setup() {
     const defaultSystemPrompt = `你是一个正在与用户对话的 AI 角色。请严格按照用户在“角色设定”中填写的设定来扮演角色。\n【通用规则】\n1. 请使用“你”来称呼玩家。\n2. 当需要指代玩家时，请务必使用设定的称呼。\n3. 如果玩家设定了称呼、性格、世界观，请绝对遵从。`;
 
-    // ================= IndexedDB 封装 =================
     const dbGet = async (key, def) => { const v = await idbKeyval.get(key); return v !== undefined ? v : def; };
     const deepUnwrap = (obj) => {
       if (obj === null || typeof obj !== 'object') return obj;
@@ -294,7 +253,6 @@ createApp({
     const dbSet = async (key, val) => { try { await idbKeyval.set(key, deepUnwrap(val)); } catch (e) { console.error(e); } };
     const dbDel = async (key) => { try { await idbKeyval.del(key); } catch (e) {} };
 
-    // ================= 核心状态 =================
     const roleList = ref([]);
     const activeRoleId = ref(null);
     const showSidebar = ref(false);
@@ -328,16 +286,13 @@ createApp({
     let secondMessageTimer = null;
     let padTickTimer = null; 
     let extractor = null;
-
     const isPoking = ref(false);
 
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
-    // ================= 时间与渲染相关处理 =================
     function showTimeDivider(index) {
       if (index === 0) return true; 
-      const currentMsg = messages.value[index];
-      const prevMsg = messages.value[index - 1];
+      const currentMsg = messages.value[index]; const prevMsg = messages.value[index - 1];
       if (!currentMsg.timestamp || !prevMsg.timestamp) return false;
       return (currentMsg.timestamp - prevMsg.timestamp) > 4 * 60 * 1000; 
     }
@@ -363,11 +318,9 @@ createApp({
       });
     }
 
-    // ================= 信任度与 PAD =================
     function getTrust() {
       let t = parseInt(localStorage.getItem(getKey('trust')));
-      if (isNaN(t)) t = 20;
-      trust.value = t; return t;
+      if (isNaN(t)) t = 20; trust.value = t; return t;
     }
     function getTrustStage(t) {
       if (t <= 20) return "防备/陌生。对话客气保持距离，不主动交心。";
@@ -394,8 +347,7 @@ createApp({
         pad.P += (baseline.P - pad.P) * rate; pad.A += (baseline.A - pad.A) * rate; pad.D += (baseline.D - pad.D) * rate;
         localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad));
       }
-      localStorage.setItem(getKey('pad_update_time'), now);
-      currentPAD.value = pad; return pad;
+      localStorage.setItem(getKey('pad_update_time'), now); currentPAD.value = pad; return pad;
     }
 
     function tickPAD() {
@@ -405,24 +357,18 @@ createApp({
       if (offlineHours > 0) {
         const rate = 1 - Math.pow(0.5, offlineHours / 4);
         pad.P += (baseline.P - pad.P) * rate; pad.A += (baseline.A - pad.A) * rate; pad.D += (baseline.D - pad.D) * rate;
-        localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad)); localStorage.setItem(getKey('pad_update_time'), now);
-        currentPAD.value = pad;
+        localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad)); localStorage.setItem(getKey('pad_update_time'), now); currentPAD.value = pad;
       }
     }
 
-    // ================= 戳一戳 (极简纯物理反馈) =================
     async function pokeAI() {
       if (!isAppReady.value || loading.value) return;
       if (navigator.vibrate) navigator.vibrate(30);
-      isPoking.value = true; 
-      setTimeout(() => isPoking.value = false, 400);
-      
+      isPoking.value = true; setTimeout(() => isPoking.value = false, 400);
       messages.value.push({ role: 'system', content: `你戳了戳 ${cfg.value.name}`, isPoke: true, timestamp: Date.now() });
-      toBottom(); 
-      await saveMessages();
+      toBottom(); await saveMessages();
     }
 
-    // ================= 数据加载与初始化 =================
     async function loadRoleData() {
       const loadedCfg = await dbGet(getKey('cfg'), null);
       cfg.value = loadedCfg || { apiKey: cfg.value.apiKey, name: '新角色', userName: 'TA', system: defaultSystemPrompt, baselinePAD: { P: 20, A: -20, D: -30 } };
@@ -457,7 +403,6 @@ createApp({
       await loadRoleData(); showSettings.value = !cfg.value.apiKey;
     }
 
-    // ================= 存储 =================
     const saveCfg = async () => {
       await dbSet(getKey('cfg'), cfg.value);
       const r = roleList.value.find(r => r.id === activeRoleId.value);
@@ -468,9 +413,7 @@ createApp({
     const saveDiary = async () => await dbSet(getKey('diaryLogs'), diaryLogs.value);
     const saveMemoryBank = async () => await dbSet(getKey('memoryBank'), memoryBank.value);
     const saveTraits = async () => await dbSet(getKey('growthTraits'), growthTraits.value);
-
-    // ================= 角色管理 =================
-    const switchRole = async (id) => {
+          const switchRole = async (id) => {
       if (id === activeRoleId.value) { showSidebar.value = false; return; }
       if (loading.value) return alert("正在回复中，请稍等...");
       await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank(); await saveTraits();
@@ -497,7 +440,6 @@ createApp({
       roleList.value = roleList.value.filter(r => r.id !== id); localStorage.setItem('role_list', JSON.stringify(roleList.value)); switchRole(roleList.value[0].id);
     };
 
-    // ================= 向量检索 =================
     async function initEmbeddingModel() {
       if (extractor) return extractor; if (!window.TransformersPipeline) return null;
       extractor = await window.TransformersPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { progress_callback: () => {} }); return extractor;
@@ -525,7 +467,6 @@ createApp({
       return "暂无相关记忆。";
     }
 
-    // ================= 记忆提取 =================
     async function extractMemories() {
       if (isSummarizing.value || loading.value || messages.value.length < 15) return;
       isSummarizing.value = true;
@@ -572,9 +513,7 @@ createApp({
       loadingTimer = setInterval(() => { loadingText.value = pool[Math.floor(Math.random() * pool.length)]; }, 1500);
     }
     function stopLoadingText() { if (loadingTimer) { clearInterval(loadingTimer); loadingTimer = null; } }
-
-    // ================= 网络请求 =================
-    async function streamRequest(payloadMessages, onDelta, onFinish, isJson = false, modelName = 'deepseek-chat', onReasoning = null) {
+                                            async function streamRequest(payloadMessages, onDelta, onFinish, isJson = false, modelName = 'deepseek-chat', onReasoning = null) {
       try {
         const res = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
@@ -600,7 +539,6 @@ createApp({
       } catch (e) { onDelta('\n\n[出错] ' + e.message); } finally { onFinish && onFinish(); }
     }
 
-    // ================= 导演 & 演员 =================
     async function performDirectorAndActor(userText, aiIdx, onComplete) {
       const pad = getPAD(); const currentTrust = getTrust(); const timeString = getCurrentTimeString(); const charName = cfg.value.name || 'AI';
       const recalledMemory = await searchMemories(userText);
@@ -661,10 +599,8 @@ createApp({
           toBottom(); extractMemories(); startInactivityTimer(); onComplete && onComplete();
         }, false, 'deepseek-reasoner', (reasoningDelta) => { messages.value[aiIdx].reasoning += reasoningDelta; });
       }, null, true, 'deepseek-chat');
-    }
-
-    // ================= 自动日记与人格演化 =================
-    async function evolvePersonality(dateStr, isBlank) {
+      }
+              async function evolvePersonality(dateStr, isBlank) {
       if (growthTraits.value.length >= 8) return;
 
       const pad = getPAD(); const currentTrust = getTrust();
@@ -742,7 +678,6 @@ ${cfg.value.system}
         await saveDiary(); 
         if (!isAuto) alert("日记写好啦！");
         
-        // ✨ 调用 AI 生成符合人设的演化印记
         await evolvePersonality(finalDateStr, isBlank);
 
       } catch (e) { if (!isAuto) alert("写日记失败：" + e.message); } finally { isGeneratingDiary.value = false; }
@@ -765,7 +700,6 @@ ${cfg.value.system}
       }
     }
 
-    // ================= 辅助功能 =================
     const getAvatarChar = (name) => { if (!name) return '?'; return name.trim().charAt(0).toUpperCase(); };
     async function toBottom() { await nextTick(); if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight; }
     
@@ -789,134 +723,132 @@ ${cfg.value.system}
       const h = n.getHours(); let p = "深夜"; if(h>=5&&h<9)p="早晨";else if(h>=9&&h<12)p="上午";else if(h>=12&&h<14)p="中午";else if(h>=14&&h<18)p="下午";else if(h>=18&&h<23)p="晚上";
       return `${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日 星期${w[n.getDay()]} ${p}${h.toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')}`;
     };
+                                                                                                                            const clearInactivityTimer = () => { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } };
+const clearSecondMessageTimer = () => { if (secondMessageTimer) { clearTimeout(secondMessageTimer); secondMessageTimer = null; } };
+const startInactivityTimer = () => { clearInactivityTimer(); inactivityTimer = setTimeout(triggerInactivitySequence, 120000); };
 
-    const clearInactivityTimer = () => { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } };
-    const clearSecondMessageTimer = () => { if (secondMessageTimer) { clearTimeout(secondMessageTimer); secondMessageTimer = null; } };
-    const startInactivityTimer = () => { clearInactivityTimer(); inactivityTimer = setTimeout(triggerInactivitySequence, 120000); };
-
-    async function triggerInactivitySequence() {
-      clearInactivityTimer(); clearSecondMessageTimer();
-      const last = messages.value[messages.value.length - 1];
-      if (!last || last.role !== 'assistant' || loading.value || !cfg.value.apiKey) return;
-      
-      loading.value = true; const idx = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-      
-      const evt = `（系统事件：玩家已经有一段时间没有回复你了。请结合你当前的 PAD 情绪与信任度，主动发一条 1-2 句话的消息。动作描写要符合人设，不要直接问在不在。）`;
-      const idx2 = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-      loading.value = true; const pad = getPAD(); startLoadingText(pad);
-      
-      await performDirectorAndActor(evt, idx2, async () => { 
-        await saveMessages();
-        secondMessageTimer = setTimeout(async () => {
-          const latest = messages.value[messages.value.length - 1];
-          if (latest && latest.role === 'assistant' && !loading.value) {
-            const evt2 = `（系统事件：玩家仍然没有回复。再发一条 1 句话的消息，语气带一点委屈或试探。）`;
-            const nIdx = messages.value.length;
-            messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-            loading.value = true; startLoadingText(getPAD());
-            await performDirectorAndActor(evt2, nIdx, async () => { await saveMessages(); });
-          }
-        }, 240000);
-      });
-    }
-
-    const startEdit = (index) => { if (loading.value) return; editingIndex.value = index; editInput.value = messages.value[index].content; };
-    const cancelEdit = () => { editingIndex.value = -1; editInput.value = ''; };
-
-    const saveEdit = async (index) => {
-      const newText = editInput.value.trim(); if (!newText) return;
-      if (newText.length > 2000) return alert("话太长啦。");
-      const old = JSON.parse(JSON.stringify(messages.value));
-      messages.value[index].content = newText; messages.value[index].timestamp = Date.now();
-      messages.value = messages.value.slice(0, index + 1);
-      editingIndex.value = -1; editInput.value = ''; loading.value = true; await saveMessages();
-      const aiIdx = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-      startLoadingText(getPAD());
-      
-      await performDirectorAndActor(newText, aiIdx, async () => {
-        const nt = JSON.parse(JSON.stringify(messages.value));
-        if (!branches.value[index]) branches.value[index] = { active: 0, list: [old] };
-        branches.value[index].list.push(nt);
-        if (branches.value[index].list.length > 5) branches.value[index].list.shift();
-        branches.value[index].active = branches.value[index].list.length - 1;
-        await saveBranches(); await saveMessages();
-      });
-    };
-
-    const switchRoute = async (index, direction) => {
-      if (loading.value) return; const branch = branches.value[index]; if (!branch) return;
-      let na = branch.active + direction;
-      if (na < 0) na = branch.list.length - 1; if (na >= branch.list.length) na = 0;
-      branch.active = na; messages.value = JSON.parse(JSON.stringify(branch.list[na]));
-      await saveMessages(); await saveBranches(); toBottom();
-    };
-
-    async function regenerate() {
-      if (loading.value || messages.value.length === 0) return;
-      const last = messages.value[messages.value.length - 1]; if (last.role !== 'assistant') return;
-      messages.value.pop(); loading.value = true; await saveMessages(); toBottom();
-      const userText = messages.value[messages.value.length - 1]?.content || "（主动打招呼）";
-      const aiIdx = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() });
-      startLoadingText(getPAD());
-      await performDirectorAndActor(userText, aiIdx, async () => { await saveMessages(); });
-    }
-
-    async function triggerGreeting() {
-      if (loading.value || !cfg.value.apiKey) return;
-      const lastTime = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
-      const diff = Date.now() - lastTime;
-      let ago = "第一次见面"; 
-      if (lastTime > 0) {
-        if (diff < 3600000) ago = "刚刚离开一会儿";
-        else if (diff < 86400000) ago = `离开 ${Math.floor(diff/3600000)} 小时`;
-        else ago = `离开 ${Math.floor(diff/86400000)} 天`;
+async function triggerInactivitySequence() {
+  clearInactivityTimer(); clearSecondMessageTimer();
+  const last = messages.value[messages.value.length - 1];
+  if (!last || last.role !== 'assistant' || loading.value || !cfg.value.apiKey) return;
+  
+  loading.value = true; const idx = messages.value.length;
+  messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+  
+  const evt = `（系统事件：玩家已经有一段时间没有回复你了。请结合你当前的 PAD 情绪与信任度，主动发一条 1-2 句话的消息。动作描写要符合人设，不要直接问在不在。）`;
+  const idx2 = messages.value.length;
+  messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+  loading.value = true; const pad = getPAD(); startLoadingText(pad);
+  
+  await performDirectorAndActor(evt, idx2, async () => { 
+    await saveMessages();
+    secondMessageTimer = setTimeout(async () => {
+      const latest = messages.value[messages.value.length - 1];
+      if (latest && latest.role === 'assistant' && !loading.value) {
+        const evt2 = `（系统事件：玩家仍然没有回复。再发一条 1 句话的消息，语气带一点委屈或试探。）`;
+        const nIdx = messages.value.length;
+        messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+        loading.value = true; startLoadingText(getPAD());
+        await performDirectorAndActor(evt2, nIdx, async () => { await saveMessages(); });
       }
-      const evt = `（系统事件：玩家打开了聊天界面。状态：【${ago}】。请根据你当前的 PAD 情绪与信任度，主动向玩家打招呼。）`;
-      const idx = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-      loading.value = true; startLoadingText(getPAD());
-      await performDirectorAndActor(evt, idx, async () => { 
-        await saveMessages(); localStorage.setItem(getKey('lastMessageTime'), Date.now()); startInactivityTimer();
-      });
-    }
+    }, 240000);
+  });
+}
 
-    onMounted(async () => {
-      await initApp(); getPAD();
-      initEmbeddingModel();
-      if (padTickTimer) clearInterval(padTickTimer); padTickTimer = setInterval(tickPAD, 60000);
-      isAppReady.value = true;
-      setTimeout(() => { checkAndAutoGenerateDiary(); }, 3000);
-      if (cfg.value.apiKey) checkAndTriggerGreeting();
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    });
+const startEdit = (index) => { if (loading.value) return; editingIndex.value = index; editInput.value = messages.value[index].content; };
+const cancelEdit = () => { editingIndex.value = -1; editInput.value = ''; };
 
-    onUnmounted(() => {
-      localStorage.setItem('lastLeaveTime', Date.now());
-      clearInactivityTimer(); clearSecondMessageTimer(); if (padTickTimer) clearInterval(padTickTimer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    });
+const saveEdit = async (index) => {
+  const newText = editInput.value.trim(); if (!newText) return;
+  if (newText.length > 2000) return alert("话太长啦。");
+  const old = JSON.parse(JSON.stringify(messages.value));
+  messages.value[index].content = newText; messages.value[index].timestamp = Date.now();
+  messages.value = messages.value.slice(0, index + 1);
+  editingIndex.value = -1; editInput.value = ''; loading.value = true; await saveMessages();
+  const aiIdx = messages.value.length;
+  messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+  startLoadingText(getPAD());
+  
+  await performDirectorAndActor(newText, aiIdx, async () => {
+    const nt = JSON.parse(JSON.stringify(messages.value));
+    if (!branches.value[index]) branches.value[index] = { active: 0, list: [old] };
+    branches.value[index].list.push(nt);
+    if (branches.value[index].list.length > 5) branches.value[index].list.shift();
+    branches.value[index].active = branches.value[index].list.length - 1;
+    await saveBranches(); await saveMessages();
+  });
+};
 
-    const checkAndTriggerGreeting = () => {
-      if (loading.value || !cfg.value.apiKey) return;
-      const ll = parseInt(localStorage.getItem('lastLeaveTime')) || 0;
-      const lm = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
-      if ((ll > 0 && Date.now() - ll > 1200000) || (lm > 0 && Date.now() - lm > 1200000)) triggerGreeting();
-    };
+const switchRoute = async (index, direction) => {
+  if (loading.value) return; const branch = branches.value[index]; if (!branch) return;
+  let na = branch.active + direction;
+  if (na < 0) na = branch.list.length - 1; if (na >= branch.list.length) na = 0;
+  branch.active = na; messages.value = JSON.parse(JSON.stringify(branch.list[na]));
+  await saveMessages(); await saveBranches(); toBottom();
+};
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') localStorage.setItem('lastLeaveTime', Date.now());
-      else if (document.visibilityState === 'visible') {
-        getPAD(); checkAndTriggerGreeting();
-        const last = messages.value[messages.value.length - 1];
-        if (last && last.role === 'assistant' && !loading.value) startInactivityTimer();
-      }
-    };
+async function regenerate() {
+  if (loading.value || messages.value.length === 0) return;
+  const last = messages.value[messages.value.length - 1]; if (last.role !== 'assistant') return;
+  messages.value.pop(); loading.value = true; await saveMessages(); toBottom();
+  const userText = messages.value[messages.value.length - 1]?.content || "（主动打招呼）";
+  const aiIdx = messages.value.length;
+  messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() });
+  startLoadingText(getPAD());
+  await performDirectorAndActor(userText, aiIdx, async () => { await saveMessages(); });
+}
 
-    const exportData = async () => {
+async function triggerGreeting() {
+  if (loading.value || !cfg.value.apiKey) return;
+  const lastTime = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
+  const diff = Date.now() - lastTime;
+  let ago = "第一次见面"; 
+  if (lastTime > 0) {
+    if (diff < 3600000) ago = "刚刚离开一会儿";
+    else if (diff < 86400000) ago = `离开 ${Math.floor(diff/3600000)} 小时`;
+    else ago = `离开 ${Math.floor(diff/86400000)} 天`;
+  }
+  const evt = `（系统事件：玩家打开了聊天界面。状态：【${ago}】。请根据你当前的 PAD 情绪与信任度，主动向玩家打招呼。）`;
+  const idx = messages.value.length;
+  messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+  loading.value = true; startLoadingText(getPAD());
+  await performDirectorAndActor(evt, idx, async () => { 
+    await saveMessages(); localStorage.setItem(getKey('lastMessageTime'), Date.now()); startInactivityTimer();
+  });
+}
+
+onMounted(async () => {
+  await initApp(); getPAD();
+  initEmbeddingModel();
+  if (padTickTimer) clearInterval(padTickTimer); padTickTimer = setInterval(tickPAD, 60000);
+  isAppReady.value = true;
+  setTimeout(() => { checkAndAutoGenerateDiary(); }, 3000);
+  if (cfg.value.apiKey) checkAndTriggerGreeting();
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  localStorage.setItem('lastLeaveTime', Date.now());
+  clearInactivityTimer(); clearSecondMessageTimer(); if (padTickTimer) clearInterval(padTickTimer);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+});
+
+const checkAndTriggerGreeting = () => {
+  if (loading.value || !cfg.value.apiKey) return;
+  const ll = parseInt(localStorage.getItem('lastLeaveTime')) || 0;
+  const lm = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
+  if ((ll > 0 && Date.now() - ll > 1200000) || (lm > 0 && Date.now() - lm > 1200000)) triggerGreeting();
+};
+
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'hidden') localStorage.setItem('lastLeaveTime', Date.now());
+  else if (document.visibilityState === 'visible') {
+    getPAD(); checkAndTriggerGreeting();
+    const last = messages.value[messages.value.length - 1];
+    if (last && last.role === 'assistant' && !loading.value) startInactivityTimer();
+  }
+};
+      const exportData = async () => {
       try {
         const backup = { roleList: roleList.value, activeRoleId: activeRoleId.value, rolesData: {} };
         for (const role of roleList.value) {
