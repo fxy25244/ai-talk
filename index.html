@@ -70,7 +70,7 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .bubble-container { display: flex; flex-direction: column; max-width: 75%; }
 .msg.user .bubble-container { align-items: flex-end; }
 .char-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #f0f4f8; color: #475569; display: flex; justify-content: center; align-items: center; font-size: 16px; font-weight: 600; flex-shrink: 0; margin-top: 4px; margin-right: 8px; user-select: none; }
-.bubble{min-width: 60px;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.05);text-align:left;position:relative}
+.bubble{min-width: 60px;padding:10px 14px;border-radius:16px;font-size:15px;line-height:1.55;word-break:break-word;box-shadow:0 1px 2px rgba(0,0,0,0.05);text-align:left;position:relative}
 .msg.user .bubble{background:#007aff;color:#fff;border-bottom-right-radius:4px}
 .msg.assistant .bubble{background:#f0f0f2;color:#111;border-bottom-left-radius:4px}
 
@@ -209,9 +209,9 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
         <div style="border-top: 1px dashed #ccc; padding-top: 10px;">
           <div style="font-size:12px; color:#666; margin-bottom:6px;">实时数值 (会随时间衰减)</div>
           <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #e0e0e0; display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom: 8px;">
-            <span style="color: #ff3b30;">P: {{ currentPAD.P.toFixed(1) }}</span>
-            <span style="color: #ff9500;">A: {{ currentPAD.A.toFixed(1) }}</span>
-            <span style="color: #007aff;">D: {{ currentPAD.D.toFixed(1) }}</span>
+            <span style="color: #ff3b30;">P: {{ Number(currentPAD?.P || 0).toFixed(1) }}</span>
+            <span style="color: #ff9500;">A: {{ Number(currentPAD?.A || 0).toFixed(1) }}</span>
+            <span style="color: #007aff;">D: {{ Number(currentPAD?.D || 0).toFixed(1) }}</span>
           </div>
           <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #ffb3ba; display:flex; justify-content:center; font-size:13px; font-weight:600; color: #ff3b30;">
             ❤️ 信任度: {{ currentTrust }} / 100
@@ -232,7 +232,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
           <div style="font-size: 13px; color: #333; line-height: 1.4;">{{ mem.content }}</div>
           <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #888;">
             <span>⭐ 重要度: {{ mem.importance }}/10</span>
-            <span>🕒 留存: {{ getMemoryRetention(mem).toFixed(1) }}%</span>
+            <span>🕒 留存: {{ Number(getMemoryRetention(mem) || 0).toFixed(1) }}%</span>
             <span style="color: #ff3b30; cursor: pointer;" @click="deleteMemory(idx)">删除</span>
           </div>
         </div>
@@ -261,6 +261,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
               <button class="btn-save" @click="saveEdit(i)">保存并重新生成</button>
             </div>
           </div>
+          <!-- ✨ 这里调用了 formatMessage，会将括号变灰 -->
           <div v-else class="bubble" v-html="formatMessage(m.content || '...')"></div>
           
           <!-- OCC 标签 -->
@@ -392,6 +393,8 @@ createApp({
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
     // ================= 工具函数 =================
+    
+    // ✨ 核心功能：将文本中的括号内容渲染为灰色斜体
     function formatMessage(text) {
       if (!text) return '';
       return text.replace(/[（(](.*?)[）)]/g, '<span style="color:#888; font-style:italic;">($1)</span>');
@@ -432,7 +435,7 @@ createApp({
 
     function getMemoryRetention(mem) {
       const now = Date.now();
-      const daysPassed = (now - mem.lastAccessed) / (1000 * 60 * 60 * 24);
+      const daysPassed = (now - (mem.lastAccessed || now)) / (1000 * 60 * 60 * 24);
       return Math.exp(-daysPassed / 30) * 100;
     }
 
@@ -460,7 +463,13 @@ createApp({
     async function loadRoleData() {
       const loadedCfg = await dbGet(getKey('cfg'), null);
       cfg.value = loadedCfg || { apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } };
-      if (!cfg.value.baselinePAD) cfg.value.baselinePAD = { P: 20, A: -20, D: -30 };
+      
+      // ✨ 核心修复：强力清洗旧数据，防止 undefined 导致白屏
+      if (!cfg.value.baselinePAD) cfg.value.baselinePAD = {};
+      if (cfg.value.baselinePAD.P === undefined) cfg.value.baselinePAD.P = 20;
+      if (cfg.value.baselinePAD.A === undefined) cfg.value.baselinePAD.A = -20;
+      if (cfg.value.baselinePAD.D === undefined) cfg.value.baselinePAD.D = -30;
+      
       if (cfg.value.dynamicTrait === undefined) cfg.value.dynamicTrait = '';
       if (cfg.value.enableGrowth === undefined) cfg.value.enableGrowth = false;
       
@@ -562,7 +571,7 @@ createApp({
       
       const scored = memoryBank.value.map(m => {
         const sim = dotProduct(queryVector, m.vector);
-        const daysPassed = (now - m.lastAccessed) / (1000 * 60 * 60 * 24);
+        const daysPassed = (now - (m.lastAccessed || now)) / (1000 * 60 * 60 * 24);
         const retention = Math.exp(-daysPassed / 30);
         return { ...m, sim, retention, score: sim * retention * (m.importance / 5) };
       });
@@ -604,7 +613,7 @@ createApp({
 
     function cleanMemoryBank() {
       const now = Date.now();
-      memoryBank.value = memoryBank.value.filter(m => !(Math.exp(-((now - m.lastAccessed) / (1000 * 60 * 60 * 24)) / 30) < 0.05 && m.importance < 7));
+      memoryBank.value = memoryBank.value.filter(m => !(Math.exp(-((now - (m.lastAccessed || now)) / (1000 * 60 * 60 * 24)) / 30) < 0.05 && m.importance < 7));
       if (memoryBank.value.length > 100) {
         memoryBank.value.sort((a, b) => b.importance - a.importance || b.lastAccessed - a.lastAccessed);
         memoryBank.value = memoryBank.value.slice(0, 100);
@@ -663,9 +672,8 @@ createApp({
       const charName = cfg.value.name || 'AI';
       
       const recalledMemory = await searchMemories(userText);
-      messages.value[aiIdx].recalled_memory = recalledMemory; // 挂载记忆
+      messages.value[aiIdx].recalled_memory = recalledMemory;
 
-      // 动态世界线
       let growthContext = "";
       if (cfg.value.enableGrowth) {
         const currentRole = roleList.value.find(r => r.id === activeRoleId.value);
@@ -681,7 +689,6 @@ createApp({
         extraRules = `\n【特殊环境规则（主动搭话）】\n玩家并没有发消息，是你主动找 TA。请表现出孤独感或思念，用日常分享来破冰。`;
       }
 
-      // 构建导演 Prompt (上下文 8 条)
       const recentForDirector = messages.value.slice(0, aiIdx).slice(-8).map(m => `${m.role === 'user' ? 'TA' : charName}: ${m.content}`).join('\n');
 
       const directorPrompt = [
@@ -691,6 +698,7 @@ createApp({
 【最近前情】\n${recentForDirector || '无'}\n【你脑海中浮现的往事】\n${recalledMemory}\n
 ${extraRules}
 
+【分析规则】：玩家的话中，（）内的文字代表动作或场景，括号外的代表语言。请透过动作分析玩家的真实意图。
 请对玩家的话进行 OCC 认知评估。
 【PAD 变化量量表】：
 - 日常寒暄/微小波动：-5 到 +5。
@@ -728,14 +736,19 @@ ${extraRules}
         
         const subconsciousWhisper = `你感到一阵【${result.occ_emotion}】，因为${result.occ_reason}。你的身体不由得做出了反应：${result.director_script}`;
         
-        // 构建演员 Prompt (上下文 4 条)
         const actorHistory = messages.value.slice(0, aiIdx).slice(-4).map(m => ({ role: m.role, content: m.content }));
         let trustLevelText = trust <= 20 ? "戒备期，不敢靠近" : (trust <= 50 ? "熟悉期，开始依赖" : "亲密期，极度黏人");
 
         const actorPrompt = [
-          { role: 'system', content: `${cfg.value.system}\n${cfg.value.dynamicTrait ? '【当前心智】'+cfg.value.dynamicTrait : ''}\n【关系阶段】：${trustLevelText}\n【输出格式】：必须严格遵循（动作/神态）+ 语言台词。非语言全部放全角括号内。绝不要长篇大论。` },
+          { role: 'system', content: `${cfg.value.system}\n${cfg.value.dynamicTrait ? '【当前心智】'+cfg.value.dynamicTrait : ''}\n【关系阶段】：${trustLevelText}\n
+【输出格式规范】
+1. 你的回复必须严格遵循：**（动作/神态/场景描写）+ 语言台词**。
+2. 所有的非语言信息（如：叹气、拉衣角、眼神闪躲、周围的环境音等）必须全部放在全角括号（）内。
+3. 括号外只能是你要说的台词。
+4. 绝不要长篇大论，字数越少越好，留白至上。
+5. 绝对不要出戏，绝对不要在台词里提及“剧本”、“情绪标签”等系统词汇。` },
           ...actorHistory,
-          { role: 'user', content: `【刚刚发生的事】\n他对你说：“${userText}”。\n\n【你瞬间的直觉】\n${subconsciousWhisper}\n\n请输出你的微动作和极简台词：` }
+          { role: 'user', content: `【刚刚发生的事】\n他对你说：“${userText}”。\n\n【你瞬间的直觉】\n${subconsciousWhisper}\n\n请严格按照（动作）+ 台词 的格式，输出你的极简回复：` }
         ];
         
         messages.value[aiIdx].reasoning = '';
@@ -844,7 +857,6 @@ ${extraRules}
       const todayStr = new Date().toLocaleDateString();
       if (localStorage.getItem(getKey('lastAutoJournalDate')) === todayStr) return;
 
-      // 提取 24 小时内的记忆
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
       const recentMemories = memoryBank.value.filter(m => m.createdAt > oneDayAgo && m.importance >= 4).sort((a, b) => b.importance - a.importance).slice(0, 10);
       const highlightMemories = memoryBank.value.filter(m => m.importance >= 9 && m.createdAt <= oneDayAgo).sort((a, b) => b.createdAt - a.createdAt).slice(0, 2);
@@ -948,7 +960,6 @@ ${extraRules}
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); 
       toBottom(); loading.value = true; const pad = getPAD(); startLoadingText(pad);
 
-      // 走完整的导演-演员流程，事件类型为 auto
       const eventText = `（系统事件：玩家已经有一段时间没有回复你了。请根据你现在的 PAD 情绪，以角色身份主动给 TA 发一条消息。表达你此刻的想法或感受，不要直接问 TA 在不在。动作描写要符合人设，1-2句话。）`;
 
       await performDirectorAndActor(eventText, idx, async () => { 
