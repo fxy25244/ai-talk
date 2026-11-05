@@ -261,10 +261,8 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
               <button class="btn-save" @click="saveEdit(i)">保存并重新生成</button>
             </div>
           </div>
-          <!-- ✨ 这里调用了 formatMessage，会将括号变灰 -->
           <div v-else class="bubble" v-html="formatMessage(m.content || '...')"></div>
           
-          <!-- OCC 标签 -->
           <div v-if="m.occ_emotion && m.content" style="text-align: left; margin-top: 4px;">
             <span class="occ-badge">{{ m.occ_emotion }}</span>
           </div>
@@ -273,7 +271,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
             <span class="loading-text">{{ loadingText }}<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
           </div>
 
-          <!-- 内心戏 -->
           <div v-if="m.reasoning" class="reasoning-container">
             <button class="reasoning-toggle" @click="expandedReasoning = expandedReasoning === i ? -1 : i">
               {{ expandedReasoning === i ? '🫧 收起内心戏' : '🫧 偷看内心戏' }}
@@ -281,7 +278,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
             <div v-show="expandedReasoning === i" class="reasoning-content">{{ m.reasoning }}</div>
           </div>
 
-          <!-- 唤醒记忆 -->
           <div v-if="m.recalled_memory && m.recalled_memory !== '暂无相关记忆。'" class="reasoning-container">
             <button class="reasoning-toggle" style="color: #007aff;" @click="expandedMemory = expandedMemory === i ? -1 : i">
               {{ expandedMemory === i ? '🧠 收起唤醒的记忆' : '🧠 查看唤醒的记忆' }}
@@ -309,7 +305,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <button @click="send" :disabled="loading || !isAppReady">发送</button>
   </footer>
 
-  <!-- 日记本弹层 -->
   <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
     <div class="diary-panel">
       <div class="diary-header">
@@ -336,7 +331,13 @@ createApp({
     const defaultSystemPrompt = `【基础设定】\n你是一个正在与用户对话的 AI 角色。请严格遵守角色设定。\n【心智设定】\n安静，服从。`;
 
     // ================= IndexedDB 封装 =================
-    const dbGet = async (key, def) => { try { const v = await idbKeyval.get(key); return v !== undefined ? v : def; } catch(e) { return def; } };
+    const dbGet = async (key, def) => { 
+      try { 
+        if (!window.idbKeyval) return def; // 如果库没加载出来，直接返回默认值
+        const v = await idbKeyval.get(key); 
+        return v !== undefined ? v : def; 
+      } catch(e) { return def; } 
+    };
     const deepUnwrap = (obj) => {
       if (obj === null || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(deepUnwrap);
@@ -393,8 +394,6 @@ createApp({
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
     // ================= 工具函数 =================
-    
-    // ✨ 核心功能：将文本中的括号内容渲染为灰色斜体
     function formatMessage(text) {
       if (!text) return '';
       return text.replace(/[（(](.*?)[）)]/g, '<span style="color:#888; font-style:italic;">($1)</span>');
@@ -441,7 +440,12 @@ createApp({
 
     // ================= 初始化与存储 =================
     async function initApp() {
-      roleList.value = JSON.parse(localStorage.getItem('role_list') || '[]');
+      try {
+        const parsedList = JSON.parse(localStorage.getItem('role_list') || '[]');
+        roleList.value = Array.isArray(parsedList) ? parsedList : [];
+      } catch(e) {
+        roleList.value = [];
+      }
       activeRoleId.value = localStorage.getItem('active_role_id');
 
       if (roleList.value.length === 0) {
@@ -473,14 +477,19 @@ createApp({
       if (cfg.value.dynamicTrait === undefined) cfg.value.dynamicTrait = '';
       if (cfg.value.enableGrowth === undefined) cfg.value.enableGrowth = false;
       
-      messages.value = await dbGet(getKey('messages'), []);
+      // ✨ 强行保证这俩一定是数组，绝不是 null
+      const rawMsgs = await dbGet(getKey('messages'), []);
+      messages.value = Array.isArray(rawMsgs) ? rawMsgs : [];
+      
+      const rawMem = await dbGet(getKey('memoryBank'), []);
+      memoryBank.value = Array.isArray(rawMem) ? rawMem : [];
+
       let needsSave = false; let mockTime = Date.now() - (messages.value.length * 60000);
       messages.value.forEach(m => { if (!m.timestamp) { m.timestamp = mockTime; mockTime += 60000; needsSave = true; } });
       if (needsSave) await saveMessages();
 
       branches.value = await dbGet(getKey('branches'), {});
       diaryLogs.value = await dbGet(getKey('diaryLogs'), []);
-      memoryBank.value = await dbGet(getKey('memoryBank'), []);
       
       getPAD(); 
       getTrust();
@@ -507,7 +516,15 @@ createApp({
 
     // ================= PAD 与 Trust =================
     function getPAD() {
-      let pad = JSON.parse(localStorage.getItem(getKey('ai_pad'))) || { ...cfg.value.baselinePAD };
+      let pad = { ...cfg.value.baselinePAD };
+      try {
+        const stored = localStorage.getItem(getKey('ai_pad'));
+        if (stored && stored !== 'undefined') {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed.P === 'number') pad = parsed;
+        }
+      } catch (e) {}
+      
       const now = Date.now();
       const lastUpdate = parseInt(localStorage.getItem(getKey('pad_update_time'))) || now;
       const offlineHours = (now - lastUpdate) / (1000 * 60 * 60);
@@ -518,16 +535,21 @@ createApp({
         pad.P += (baseline.P - pad.P) * rate;
         pad.A += (baseline.A - pad.A) * rate;
         pad.D += (baseline.D - pad.D) * rate;
-        localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad));
       }
+      localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad));
       localStorage.setItem(getKey('pad_update_time'), now);
       currentPAD.value = pad; 
       return pad;
     }
 
     function tickPAD() {
-      let pad = JSON.parse(localStorage.getItem(getKey('ai_pad')));
-      if (!pad) return;
+      let pad = null;
+      try {
+        const stored = localStorage.getItem(getKey('ai_pad'));
+        if (stored && stored !== 'undefined') pad = JSON.parse(stored);
+      } catch (e) {}
+      if (!pad || typeof pad.P !== 'number') return;
+
       const now = Date.now();
       const lastUpdate = parseInt(localStorage.getItem(getKey('pad_update_time'))) || now;
       const offlineHours = (now - lastUpdate) / (1000 * 60 * 60);
@@ -543,7 +565,8 @@ createApp({
     }
 
     function getTrust() {
-      currentTrust.value = parseInt(localStorage.getItem(getKey('ai_trust'))) || 10;
+      const t = parseInt(localStorage.getItem(getKey('ai_trust')));
+      currentTrust.value = (!isNaN(t) && t >= 0) ? t : 10;
       return currentTrust.value;
     }
 
@@ -882,13 +905,16 @@ ${extraRules}
         });
         if (res.ok) {
           const data = await res.json();
-          const result = JSON.parse(data.choices[0].message.content.match(/\{[\s\S]*\}/)[0]);
-          const now = new Date(); const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
-          diaryLogs.value = diaryLogs.value.filter(log => log.date !== dateStr);
-          diaryLogs.value.unshift({ date: dateStr, content: result.diary, timestamp: Date.now() });
-          await saveDiary();
-          if (result.new_trait) { cfg.value.dynamicTrait = result.new_trait; await saveCfg(); }
-          localStorage.setItem(getKey('lastAutoJournalDate'), todayStr);
+          const match = data.choices[0].message.content.match(/\{[\s\S]*\}/);
+          if (match) {
+            const result = JSON.parse(match[0]);
+            const now = new Date(); const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+            diaryLogs.value = diaryLogs.value.filter(log => log.date !== dateStr);
+            diaryLogs.value.unshift({ date: dateStr, content: result.diary, timestamp: Date.now() });
+            await saveDiary();
+            if (result.new_trait) { cfg.value.dynamicTrait = result.new_trait; await saveCfg(); }
+            localStorage.setItem(getKey('lastAutoJournalDate'), todayStr);
+          }
         }
       } catch (e) { console.error(e); } finally { isAutoJournaling.value = false; }
     }
