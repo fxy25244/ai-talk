@@ -39,6 +39,7 @@ header button:hover{background:#f0f0f0}
 .sidebar-header h3 { font-size: 16px; color: #333; }
 .sidebar-header button { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; }
 .role-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.role-group-title { font-size: 12px; color: #999; padding: 8px 12px 4px 12px; font-weight: 600; }
 .role-item { padding: 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background 0.2s; }
 .role-item:hover { background: #f5f5f7; }
 .role-item.active { background: #e0f2fe; color: #0369a1; font-weight: 600; }
@@ -55,6 +56,11 @@ header button:hover{background:#f0f0f0}
 .settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;flex:1;margin-top:4px}
 .settings .btn-backup{padding:8px;border:none;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:14px;cursor:pointer;flex:1}
 .settings .btn-restore{padding:8px;border:none;border-radius:8px;background:#fff3e0;color:#e65100;font-size:14px;cursor:pointer;flex:1}
+
+/* 折叠面板通用 */
+.collapse-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-top: 12px; }
+.collapse-header { background: #f0f0f0; padding: 10px; font-size: 13px; font-weight: 600; color: #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.collapse-body { padding: 12px; background: #fafafa; }
 
 /* --- 聊天区 --- */
 main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
@@ -77,14 +83,15 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .typing-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
 
-/* 读心术面板 */
+/* 面板样式 */
 .reasoning-container { margin-top: 6px; width: 100%; }
 .reasoning-toggle { background: none; border: none; font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; transition: color 0.2s; text-align: left;}
 .reasoning-toggle:hover { color: #007aff; }
 .reasoning-content { background: #fafafa; border-left: 3px solid #e0e0e0; padding: 8px 12px; border-radius: 4px 8px 8px 4px; font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
-.occ-badge { display:inline-block; font-size: 10px; color: #999; border: 1px solid #ddd; border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: text-bottom; }
+/* OCC 标签 */
+.occ-badge { display: inline-block; font-size: 11px; color: #888; background: #e8e8e8; border-radius: 6px; padding: 2px 6px; margin-top: 4px; white-space: nowrap; }
 
 /* 编辑框与操作 */
 .edit-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
@@ -142,7 +149,14 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
         <button @click="showSidebar = false">&times;</button>
       </div>
       <div class="role-list">
-        <div v-for="role in roleList" :key="role.id" class="role-item" :class="{ active: activeRoleId === role.id }" @click="switchRole(role.id)">
+        <div v-if="roleList.filter(r => r.enableGrowth).length > 0" class="role-group-title">🌱 养成角色</div>
+        <div v-for="role in roleList.filter(r => r.enableGrowth)" :key="role.id" class="role-item" :class="{ active: activeRoleId === role.id }" @click="switchRole(role.id)">
+          <div class="avatar">{{ getAvatarChar(role.name) }}</div>
+          <div class="name">{{ role.name }}</div>
+        </div>
+
+        <div v-if="roleList.filter(r => !r.enableGrowth).length > 0" class="role-group-title" style="margin-top: 12px;">👤 普通角色</div>
+        <div v-for="role in roleList.filter(r => !r.enableGrowth)" :key="role.id" class="role-item" :class="{ active: activeRoleId === role.id }" @click="switchRole(role.id)">
           <div class="avatar">{{ getAvatarChar(role.name) }}</div>
           <div class="name">{{ role.name }}</div>
         </div>
@@ -155,24 +169,74 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
   <div class="settings" v-if="showSettings">
     <label>DeepSeek API Key (必填)<input v-model="cfg.apiKey" @change="saveCfg" type="password" placeholder="sk-..."></label>
     <label>角色名<input v-model="cfg.name" @change="saveCfg" placeholder="例：小丘"></label>
-    <label>角色设定<textarea v-model="cfg.system" @change="saveCfg" placeholder="支持 XML 标签、自然语言等任何格式。"></textarea></label>
     
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-      <span style="font-size:12px; color:#666;">情绪基线 (PAD)</span>
-      <button @click="generateBaselinePAD" :disabled="isGeneratingBaseline || !cfg.system" style="font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid #007aff; background:#f0f8ff; color:#007aff; cursor:pointer;">
-        {{ isGeneratingBaseline ? '正在感知灵魂...' : '✨ 根据人设自动提取' }}
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 8px;">
+      <label style="margin:0;">基础设定 (外貌/身份)</label>
+      <button @click="optimizePersona" :disabled="isOptimizing || !cfg.apiKey" style="font-size:11px; padding:2px 8px; border-radius:6px; border:1px solid #007aff; background:#fff; color:#007aff; cursor:pointer;">
+        {{ isOptimizing ? '正在解析...' : '✨ 一键标签化拆分' }}
       </button>
     </div>
-    <div style="display:flex; gap:8px; margin-top:4px;">
-      <label style="flex:1;">愉悦度 P<br><span style="font-size:10px;color:#999;">(20微开心 / -20抑郁)</span>
-        <input type="number" v-model.number="cfg.baselinePAD.P" @change="saveCfg" min="-100" max="100">
-      </label>
-      <label style="flex:1;">精力 A<br><span style="font-size:10px;color:#999;">(50活泼 / -50慵懒)</span>
-        <input type="number" v-model.number="cfg.baselinePAD.A" @change="saveCfg" min="-100" max="100">
-      </label>
-      <label style="flex:1;">支配度 D<br><span style="font-size:10px;color:#999;">(50强势 / -50顺从)</span>
-        <input type="number" v-model.number="cfg.baselinePAD.D" @change="saveCfg" min="-100" max="100">
-      </label>
+    <textarea v-model="cfg.system" @change="saveCfg" placeholder="输入自然语言或原始标签，点击上方按钮自动转化。"></textarea>
+
+    <label style="color: #ff3b30; font-weight: 600; margin-top: 8px;">🧬 心智设定 (AI 可自我演化)</label>
+    <textarea v-model="cfg.dynamicTrait" @change="saveCfg" placeholder="初始性格标签。此处内容会被 AI 随时间修改。" style="min-height: 60px; border-color: #ff9500; background: #fffdfa;"></textarea>
+
+    <label style="flex-direction: row; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
+      <input type="checkbox" v-model="cfg.enableGrowth" @change="toggleGrowth" style="width: 16px; height: 16px;">
+      <span style="font-size: 13px; color: #333; font-weight: 600;">启用“养成模式”（角色会随时间长大/成熟）</span>
+    </label>
+
+    <!-- ✨ 高级状态面板 折叠区 -->
+    <div class="collapse-card">
+      <div @click="showAdvanced = !showAdvanced" class="collapse-header">
+        <span>🎛️ 高级状态监控 (PAD / Trust)</span>
+        <span>{{ showAdvanced ? '▲' : '▼' }}</span>
+      </div>
+      <div v-show="showAdvanced" class="collapse-body">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:12px; color:#666;">性格基线 (出厂设置)</span>
+          <button @click="generateBaselinePAD" :disabled="isGeneratingBaseline || !cfg.system" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid #007aff; background:#fff; color:#007aff; cursor:pointer;">
+            {{ isGeneratingBaseline ? '感知中...' : '✨ AI 自动提取' }}
+          </button>
+        </div>
+        
+        <div style="display:flex; gap:8px; margin-bottom: 12px;">
+          <label style="flex:1; font-size:12px;">愉悦 P <input type="number" v-model.number="cfg.baselinePAD.P" @change="saveCfg" min="-100" max="100"></label>
+          <label style="flex:1; font-size:12px;">精力 A <input type="number" v-model.number="cfg.baselinePAD.A" @change="saveCfg" min="-100" max="100"></label>
+          <label style="flex:1; font-size:12px;">支配 D <input type="number" v-model.number="cfg.baselinePAD.D" @change="saveCfg" min="-100" max="100"></label>
+        </div>
+
+        <div style="border-top: 1px dashed #ccc; padding-top: 10px;">
+          <div style="font-size:12px; color:#666; margin-bottom:6px;">实时数值 (会随时间衰减)</div>
+          <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #e0e0e0; display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom: 8px;">
+            <span style="color: #ff3b30;">P: {{ currentPAD.P.toFixed(1) }}</span>
+            <span style="color: #ff9500;">A: {{ currentPAD.A.toFixed(1) }}</span>
+            <span style="color: #007aff;">D: {{ currentPAD.D.toFixed(1) }}</span>
+          </div>
+          <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #ffb3ba; display:flex; justify-content:center; font-size:13px; font-weight:600; color: #ff3b30;">
+            ❤️ 信任度: {{ currentTrust }} / 100
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✨ 记忆库查看器 -->
+    <div class="collapse-card">
+      <div @click="showMemoryBank = !showMemoryBank" class="collapse-header">
+        <span>🧠 记忆库 (共 {{ memoryBank.length }} 条)</span>
+        <span>{{ showMemoryBank ? '▲' : '▼' }}</span>
+      </div>
+      <div v-show="showMemoryBank" class="collapse-body" style="max-height: 300px; overflow-y: auto;">
+        <div v-if="memoryBank.length === 0" style="text-align: center; color: #999; font-size: 12px; padding: 10px;">她的大脑现在一片空白，多聊几句吧。</div>
+        <div v-for="(mem, idx) in memoryBank" :key="mem.id" style="background: #fff; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #007aff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+          <div style="font-size: 13px; color: #333; line-height: 1.4;">{{ mem.content }}</div>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #888;">
+            <span>⭐ 重要度: {{ mem.importance }}/10</span>
+            <span>🕒 留存: {{ getMemoryRetention(mem).toFixed(1) }}%</span>
+            <span style="color: #ff3b30; cursor: pointer;" @click="deleteMemory(idx)">删除</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="btn-row" style="margin-top:12px;">
@@ -186,17 +250,9 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
 
   <main ref="listEl">
     <template v-for="(m,i) in messages" :key="i">
-      
-      <!-- 时间分割线 -->
-      <div v-if="showTimeDivider(i)" class="time-divider">
-        {{ formatTime(m.timestamp) }}
-      </div>
-
+      <div v-if="showTimeDivider(i)" class="time-divider">{{ formatTime(m.timestamp) }}</div>
       <div :class="['msg', m.role]">
-        <div v-if="m.role === 'assistant'" class="char-avatar">
-          {{ getAvatarChar(cfg.name) }}
-        </div>
-        
+        <div v-if="m.role === 'assistant'" class="char-avatar">{{ getAvatarChar(cfg.name) }}</div>
         <div class="bubble-container">
           <div v-if="editingIndex === i" class="edit-box">
             <textarea v-model="editInput"></textarea>
@@ -205,24 +261,31 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
               <button class="btn-save" @click="saveEdit(i)">保存并重新生成</button>
             </div>
           </div>
+          <div v-else class="bubble" v-html="formatMessage(m.content || '...')"></div>
           
-          <div v-else class="bubble">
-            <span v-if="m.content">{{ m.content }}</span>
-            <span v-else-if="loading && i === messages.length - 1" class="loading-text">
-              {{ loadingText }}<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
-            </span>
-            <span v-else>...</span>
-            <span v-if="m.occ_emotion && m.content" class="occ-badge">{{ m.occ_emotion }}</span>
+          <!-- OCC 标签 -->
+          <div v-if="m.occ_emotion && m.content" style="text-align: left; margin-top: 4px;">
+            <span class="occ-badge">{{ m.occ_emotion }}</span>
+          </div>
+          
+          <div v-else-if="loading && i === messages.length - 1" class="bubble" style="background:transparent; box-shadow:none; padding:0;">
+            <span class="loading-text">{{ loadingText }}<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
           </div>
 
-          <!-- 读心术 -->
+          <!-- 内心戏 -->
           <div v-if="m.reasoning" class="reasoning-container">
             <button class="reasoning-toggle" @click="expandedReasoning = expandedReasoning === i ? -1 : i">
               {{ expandedReasoning === i ? '🫧 收起内心戏' : '🫧 偷看内心戏' }}
             </button>
-            <div v-show="expandedReasoning === i" class="reasoning-content">
-              {{ m.reasoning }}
-            </div>
+            <div v-show="expandedReasoning === i" class="reasoning-content">{{ m.reasoning }}</div>
+          </div>
+
+          <!-- 唤醒记忆 -->
+          <div v-if="m.recalled_memory && m.recalled_memory !== '暂无相关记忆。'" class="reasoning-container">
+            <button class="reasoning-toggle" style="color: #007aff;" @click="expandedMemory = expandedMemory === i ? -1 : i">
+              {{ expandedMemory === i ? '🧠 收起唤醒的记忆' : '🧠 查看唤醒的记忆' }}
+            </button>
+            <div v-show="expandedMemory === i" class="reasoning-content" style="border-left-color: #007aff; background: #f0f8ff; color: #005bb5;">{{ m.recalled_memory }}</div>
           </div>
           
           <div v-if="editingIndex !== i && !loading" class="action-btns">
@@ -236,15 +299,16 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
           </div>
         </div>
       </div>
-
     </template>
   </main>
 
   <footer>
     <textarea v-model="input" placeholder="说点什么…" @keydown.enter.exact.prevent="send" :disabled="loading || !isAppReady"></textarea>
+    <button @click="triggerWeather" :disabled="loading || !isAppReady" style="background:#f0f0f0; color:#333; padding:0 12px; font-size: 18px;" title="看看天气">🌤️</button>
     <button @click="send" :disabled="loading || !isAppReady">发送</button>
   </footer>
 
+  <!-- 日记本弹层 -->
   <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
     <div class="diary-panel">
       <div class="diary-header">
@@ -258,11 +322,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
           <div class="diary-text">{{ log.content }}</div>
         </div>
       </div>
-      <div class="diary-footer">
-        <button class="btn-write-diary" @click="generateDiary" :disabled="isGeneratingDiary || loading">
-          {{ isGeneratingDiary ? '正在动笔写日记...' : '&#9997; 写今天的日记' }}
-        </button>
-      </div>
     </div>
   </div>
 </div>
@@ -273,56 +332,35 @@ const { createApp, ref, nextTick, onMounted, onUnmounted } = Vue;
 
 createApp({
   setup() {
-    const defaultSystemPrompt = `你是一个正在与用户对话的 AI 角色。请严格按照用户在“角色设定”中填写的设定来扮演角色。\n【通用规则】\n1. 请使用“你”来称呼玩家。\n2. 当需要指代玩家时，请务必使用中性代词“TA”，绝对不要擅自使用“他”或“她”。\n3. 如果玩家设定了称呼、性格、世界观，请绝对遵从。`;
+    const defaultSystemPrompt = `【基础设定】\n你是一个正在与用户对话的 AI 角色。请严格遵守角色设定。\n【心智设定】\n安静，服从。`;
 
-    // ================= IndexedDB 封装 (深度解包，解决 Proxy 报错) =================
-    const dbGet = async (key, def) => { 
-      try {
-        const v = await idbKeyval.get(key); 
-        return v !== undefined ? v : def; 
-      } catch(e) {
-        console.error("DB读取失败", e);
-        return def;
-      }
-    };
-    
+    // ================= IndexedDB 封装 =================
+    const dbGet = async (key, def) => { try { const v = await idbKeyval.get(key); return v !== undefined ? v : def; } catch(e) { return def; } };
     const deepUnwrap = (obj) => {
       if (obj === null || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map(deepUnwrap);
       if (obj instanceof Float32Array) return Array.from(obj); 
-      
-      const raw = Vue.toRaw(obj); 
-      const res = {};
-      for (let k in raw) {
-        res[k] = deepUnwrap(raw[k]);
-      }
+      const raw = Vue.toRaw(obj); const res = {};
+      for (let k in raw) { res[k] = deepUnwrap(raw[k]); }
       return res;
     };
-
-    const dbSet = async (key, val) => { 
-      try { 
-        const plainVal = deepUnwrap(val);
-        await idbKeyval.set(key, plainVal); 
-      } catch (e) { 
-        console.error("DB写入失败", key, e); 
-      } 
-    };
-    
-    const dbDel = async (key) => { 
-      try { await idbKeyval.del(key); } catch (e) { console.error("DB删除失败", e); } 
-    };
+    const dbSet = async (key, val) => { try { await idbKeyval.set(key, deepUnwrap(val)); } catch (e) { console.error("DB写入失败", e); } };
+    const dbDel = async (key) => { try { await idbKeyval.del(key); } catch (e) {} };
 
     // ================= 核心状态 =================
     const roleList = ref([]);
     const activeRoleId = ref(null);
     const showSidebar = ref(false);
-    const isAppReady = ref(false); // ✨ 加载锁：确保数据读完前不能操作
+    const isAppReady = ref(false);
 
-    const cfg = ref({ apiKey: '', name: '新角色', system: defaultSystemPrompt, baselinePAD: { P: 20, A: -20, D: -30 } });
+    const cfg = ref({ apiKey: '', name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } });
     const messages = ref([]);
     const branches = ref({});
     const diaryLogs = ref([]);
     const memoryBank = ref([]); 
+
+    const currentPAD = ref({ P: 20, A: -20, D: -30 });
+    const currentTrust = ref(10);
 
     const input = ref('');
     const loading = ref(false);
@@ -330,12 +368,18 @@ createApp({
     const listEl = ref(null);
     const editingIndex = ref(-1);
     const editInput = ref('');
+    
     const expandedReasoning = ref(-1); 
+    const expandedMemory = ref(-1);
+    const showAdvanced = ref(false);
+    const showMemoryBank = ref(false);
 
     const showDiary = ref(false);
     const isGeneratingDiary = ref(false);
     const isGeneratingBaseline = ref(false);
+    const isOptimizing = ref(false);
     const isSummarizing = ref(false);
+    const isAutoJournaling = ref(false);
 
     const loadingText = ref('TA正在思考怎么回复你');
     let loadingTimer = null;
@@ -347,20 +391,23 @@ createApp({
 
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
-    // ================= 时间相关处理 =================
+    // ================= 工具函数 =================
+    function formatMessage(text) {
+      if (!text) return '';
+      return text.replace(/[（(](.*?)[）)]/g, '<span style="color:#888; font-style:italic;">($1)</span>');
+    }
+
     function showTimeDivider(index) {
       if (index === 0) return true; 
       const currentMsg = messages.value[index];
       const prevMsg = messages.value[index - 1];
       if (!currentMsg.timestamp || !prevMsg.timestamp) return false;
-      const gap = currentMsg.timestamp - prevMsg.timestamp;
-      return gap > 4 * 60 * 1000; 
+      return (currentMsg.timestamp - prevMsg.timestamp) > 4 * 60 * 1000; 
     }
 
     function formatTime(timestamp) {
       if (!timestamp) return '';
-      const date = new Date(timestamp);
-      const now = new Date();
+      const date = new Date(timestamp); const now = new Date();
       const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
       const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
       const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
@@ -375,14 +422,28 @@ createApp({
       return yyyy === now.getFullYear() ? `${m}月${d}日 ${timeStr}` : `${yyyy}年${m}月${d}日 ${timeStr}`;
     }
 
-    // ================= 数据库与初始化 =================
+    const getCurrentTimeString = () => {
+      const now = new Date(); const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const year = now.getFullYear(); const month = now.getMonth() + 1; const date = now.getDate(); const day = weekdays[now.getDay()];
+      const hours = now.getHours().toString().padStart(2, '0'); const minutes = now.getMinutes().toString().padStart(2, '0');
+      let period = "深夜"; if (hours >= 5 && hours < 9) period = "早晨"; else if (hours >= 9 && hours < 12) period = "上午"; else if (hours >= 12 && hours < 14) period = "中午"; else if (hours >= 14 && hours < 18) period = "下午"; else if (hours >= 18 && hours < 23) period = "晚上";
+      return `${year}年${month}月${date}日 ${day} ${period}${hours}:${minutes}`;
+    };
+
+    function getMemoryRetention(mem) {
+      const now = Date.now();
+      const daysPassed = (now - mem.lastAccessed) / (1000 * 60 * 60 * 24);
+      return Math.exp(-daysPassed / 30) * 100;
+    }
+
+    // ================= 初始化与存储 =================
     async function initApp() {
       roleList.value = JSON.parse(localStorage.getItem('role_list') || '[]');
       activeRoleId.value = localStorage.getItem('active_role_id');
 
       if (roleList.value.length === 0) {
         const firstId = Date.now().toString();
-        roleList.value.push({ id: firstId, name: '新角色' });
+        roleList.value.push({ id: firstId, name: '新角色', enableGrowth: false, createdAt: Date.now() });
         activeRoleId.value = firstId;
         localStorage.setItem('role_list', JSON.stringify(roleList.value));
         localStorage.setItem('active_role_id', firstId);
@@ -398,181 +459,44 @@ createApp({
 
     async function loadRoleData() {
       const loadedCfg = await dbGet(getKey('cfg'), null);
-      cfg.value = loadedCfg || { apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, baselinePAD: { P: 20, A: -20, D: -30 } };
+      cfg.value = loadedCfg || { apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } };
       if (!cfg.value.baselinePAD) cfg.value.baselinePAD = { P: 20, A: -20, D: -30 };
+      if (cfg.value.dynamicTrait === undefined) cfg.value.dynamicTrait = '';
+      if (cfg.value.enableGrowth === undefined) cfg.value.enableGrowth = false;
       
       messages.value = await dbGet(getKey('messages'), []);
-      
-      let needsSave = false;
-      let mockTime = Date.now() - (messages.value.length * 60000);
-      messages.value.forEach(m => {
-        if (!m.timestamp) { m.timestamp = mockTime; mockTime += 60000; needsSave = true; }
-      });
+      let needsSave = false; let mockTime = Date.now() - (messages.value.length * 60000);
+      messages.value.forEach(m => { if (!m.timestamp) { m.timestamp = mockTime; mockTime += 60000; needsSave = true; } });
       if (needsSave) await saveMessages();
 
       branches.value = await dbGet(getKey('branches'), {});
       diaryLogs.value = await dbGet(getKey('diaryLogs'), []);
       memoryBank.value = await dbGet(getKey('memoryBank'), []);
+      
+      getPAD(); 
+      getTrust();
     }
 
-    // ================= 保存逻辑 (全面异步化) =================
     const saveCfg = async () => {
       await dbSet(getKey('cfg'), cfg.value);
       const r = roleList.value.find(r => r.id === activeRoleId.value);
-      if (r) { r.name = cfg.value.name; localStorage.setItem('role_list', JSON.stringify(roleList.value)); }
+      if (r) { r.name = cfg.value.name; r.enableGrowth = cfg.value.enableGrowth; localStorage.setItem('role_list', JSON.stringify(roleList.value)); }
     };
     const saveMessages = async () => await dbSet(getKey('messages'), messages.value);
     const saveBranches = async () => await dbSet(getKey('branches'), branches.value);
     const saveDiary = async () => await dbSet(getKey('diaryLogs'), diaryLogs.value);
     const saveMemoryBank = async () => await dbSet(getKey('memoryBank'), memoryBank.value);
 
-    // ================= 角色管理 =================
-    const switchRole = async (id) => {
-      if (id === activeRoleId.value) { showSidebar.value = false; return; }
-      if (loading.value) return alert("正在回复中，请稍等...");
-      
-      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
-      activeRoleId.value = id;
-      localStorage.setItem('active_role_id', id);
-      
-      await loadRoleData();
-      
-      showSidebar.value = false; showSettings.value = false;
-      stopLoadingText(); clearInactivityTimer(); clearSecondMessageTimer();
-      
-      if (padTickTimer) clearInterval(padTickTimer);
-      padTickTimer = setInterval(tickPAD, 60000);
-      
-      nextTick(() => { toBottom(); if (cfg.value.apiKey) checkAndTriggerGreeting(); });
-    };
-
-    const addNewRole = async () => {
-      if (loading.value) return alert("正在回复中，请稍等...");
-      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
-      
-      const newId = Date.now().toString();
-      roleList.value.push({ id: newId, name: '新角色' });
-      localStorage.setItem('role_list', JSON.stringify(roleList.value));
-      
-      await dbSet(`role_${newId}_cfg`, {
-        apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, baselinePAD: { P: 20, A: -20, D: -30 }
-      });
-      
-      switchRole(newId);
-      showSettings.value = true;
-    };
-
-    const deleteRole = async () => {
-      if (roleList.value.length <= 1) return alert("至少要保留一个角色哦！");
-      if (!confirm(`确定要彻底删除角色「${cfg.value.name}」吗？\n所有记录和记忆将灰飞烟灭！`)) return;
-      
-      const idToDelete = activeRoleId.value;
-      await dbDel(`role_${idToDelete}_cfg`);
-      await dbDel(`role_${idToDelete}_messages`);
-      await dbDel(`role_${idToDelete}_branches`);
-      await dbDel(`role_${idToDelete}_diaryLogs`);
-      await dbDel(`role_${idToDelete}_memoryBank`);
-      
-      roleList.value = roleList.value.filter(r => r.id !== idToDelete);
-      localStorage.setItem('role_list', JSON.stringify(roleList.value));
-      switchRole(roleList.value[0].id);
-    };
-
-    // ================= 向量检索 (Transformers.js) =================
-    async function initEmbeddingModel() {
-      if (extractor) return extractor;
-      if (!window.TransformersPipeline) return null;
-      extractor = await window.TransformersPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { progress_callback: () => {} });
-      return extractor;
-    }
-
-    async function getEmbedding(text) {
-      if (!extractor) await initEmbeddingModel();
-      if (!extractor) return new Float32Array(384);
-      const output = await extractor(text, { pooling: 'mean', normalize: true });
-      return Array.from(output.data);
-    }
-
-    function dotProduct(vecA, vecB) {
-      let product = 0;
-      for (let i = 0; i < vecA.length; i++) product += vecA[i] * vecB[i];
-      return product;
-    }
-
-    async function searchMemories(queryText, topK = 3) {
-      if (memoryBank.value.length === 0) return "暂无相关记忆。";
-      const queryVector = await getEmbedding(queryText);
-      const now = Date.now();
-      
-      const scored = memoryBank.value.map(m => {
-        const sim = dotProduct(queryVector, m.vector);
-        const daysPassed = (now - m.lastAccessed) / (1000 * 60 * 60 * 24);
-        const retention = Math.exp(-daysPassed / 30);
-        let score = sim * retention * (m.importance / 5);
-        return { ...m, sim, retention, score };
-      });
-      
-      const valid = scored.filter(m => m.sim > 0.3).sort((a, b) => b.score - a.score).slice(0, topK);
-      
-      if (valid.length > 0) {
-        valid.forEach(vm => {
-          const target = memoryBank.value.find(m => m.id === vm.id);
-          if (target) target.lastAccessed = now;
-        });
-        await saveMemoryBank();
-        return valid.map(m => `- ${m.content}`).join('\n');
+    const toggleGrowth = async () => {
+      await saveCfg();
+      const currentRole = roleList.value.find(r => r.id === activeRoleId.value);
+      if (currentRole) {
+        currentRole.enableGrowth = cfg.value.enableGrowth;
+        localStorage.setItem('role_list', JSON.stringify(roleList.value));
       }
-      return "暂无相关记忆。";
-    }
+    };
 
-    // ================= 记忆提取与清理 =================
-    async function extractMemories() {
-      if (isSummarizing.value || loading.value || messages.value.length < 15) return;
-      isSummarizing.value = true;
-      
-      const toExtract = messages.value.slice(-12);
-      
-      const prompt = [
-        { role: 'system', content: `你是角色「${cfg.value.name}」的记忆提取助手。\n请阅读对话，提取 1-3 条最值得长期记住的【事实或事件】。不要日常废话，重点提取：偏好、重要经历、承诺、情感爆发点。每条精炼在20字以内，并给出1-10的重要度。\n请输出严格 JSON：\n{"memories": [{"content": "记忆内容", "importance": 8}]}` },
-        { role: 'user', content: toExtract.map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n') }
-      ];
-
-      await streamRequest(prompt, async (jsonStr) => {
-        try {
-          const result = JSON.parse(jsonStr.replace(/```json/g, '').replace(/```/g, '').trim());
-          if (result.memories && Array.isArray(result.memories)) {
-            for (let m of result.memories) {
-              const vector = await getEmbedding(m.content);
-              memoryBank.value.push({
-                id: Date.now().toString() + Math.random(),
-                content: m.content,
-                importance: m.importance || 5,
-                vector: vector,
-                createdAt: Date.now(),
-                lastAccessed: Date.now()
-              });
-            }
-            await saveMemoryBank();
-            cleanMemoryBank(); 
-          }
-        } catch (e) { console.error("提取记忆失败", e); }
-      }, () => { isSummarizing.value = false; }, true, 'deepseek-chat');
-    }
-
-    function cleanMemoryBank() {
-      const now = Date.now();
-      memoryBank.value = memoryBank.value.filter(m => {
-        const days = (now - m.lastAccessed) / (1000 * 60 * 60 * 24);
-        return !(Math.exp(-days / 30) < 0.05 && m.importance < 7);
-      });
-      if (memoryBank.value.length > 100) {
-        memoryBank.value.sort((a, b) => b.importance - a.importance || b.lastAccessed - a.lastAccessed);
-        memoryBank.value = memoryBank.value.slice(0, 100);
-      }
-      saveMemoryBank();
-    }
-
-    // ================= PAD 与挂机心跳 =================
+    // ================= PAD 与 Trust =================
     function getPAD() {
       let pad = JSON.parse(localStorage.getItem(getKey('ai_pad'))) || { ...cfg.value.baselinePAD };
       const now = Date.now();
@@ -588,6 +512,7 @@ createApp({
         localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad));
       }
       localStorage.setItem(getKey('pad_update_time'), now);
+      currentPAD.value = pad; 
       return pad;
     }
 
@@ -601,14 +526,95 @@ createApp({
 
       if (offlineHours > 0) {
         const rate = 1 - Math.pow(0.5, offlineHours / 4);
-        pad.P += (baseline.P - pad.P) * rate;
-        pad.A += (baseline.A - pad.A) * rate;
-        pad.D += (baseline.D - pad.D) * rate;
+        pad.P += (baseline.P - pad.P) * rate; pad.A += (baseline.A - pad.A) * rate; pad.D += (baseline.D - pad.D) * rate;
         localStorage.setItem(getKey('ai_pad'), JSON.stringify(pad));
         localStorage.setItem(getKey('pad_update_time'), now);
+        currentPAD.value = pad; 
       }
     }
 
+    function getTrust() {
+      currentTrust.value = parseInt(localStorage.getItem(getKey('ai_trust'))) || 10;
+      return currentTrust.value;
+    }
+
+    // ================= 向量与记忆系统 =================
+    async function initEmbeddingModel() {
+      if (extractor) return extractor;
+      if (!window.TransformersPipeline) return null;
+      extractor = await window.TransformersPipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { progress_callback: () => {} });
+      return extractor;
+    }
+
+    async function getEmbedding(text) {
+      if (!extractor) await initEmbeddingModel();
+      if (!extractor) return new Float32Array(384);
+      const output = await extractor(text, { pooling: 'mean', normalize: true });
+      return Array.from(output.data);
+    }
+
+    function dotProduct(vecA, vecB) { let p = 0; for (let i = 0; i < vecA.length; i++) p += vecA[i] * vecB[i]; return p; }
+
+    async function searchMemories(queryText, topK = 3) {
+      if (memoryBank.value.length === 0) return "暂无相关记忆。";
+      const queryVector = await getEmbedding(queryText);
+      const now = Date.now();
+      
+      const scored = memoryBank.value.map(m => {
+        const sim = dotProduct(queryVector, m.vector);
+        const daysPassed = (now - m.lastAccessed) / (1000 * 60 * 60 * 24);
+        const retention = Math.exp(-daysPassed / 30);
+        return { ...m, sim, retention, score: sim * retention * (m.importance / 5) };
+      });
+      
+      const valid = scored.filter(m => m.sim > 0.3).sort((a, b) => b.score - a.score).slice(0, topK);
+      
+      if (valid.length > 0) {
+        valid.forEach(vm => { const target = memoryBank.value.find(m => m.id === vm.id); if (target) target.lastAccessed = now; });
+        await saveMemoryBank();
+        return valid.map(m => `- ${m.content}`).join('\n');
+      }
+      return "暂无相关记忆。";
+    }
+
+    async function extractMemories() {
+      if (isSummarizing.value || loading.value || messages.value.length < 8) return;
+      isSummarizing.value = true;
+      
+      const toExtract = messages.value.slice(-8);
+      
+      const prompt = [
+        { role: 'system', content: `你是角色「${cfg.value.name}」的记忆提取助手。\n请阅读对话，提取 1-3 条最值得长期记住的【事实或事件】。不要日常废话，重点提取：偏好、重要经历、承诺、情感爆发点。每条精炼在20字以内。\n【重要度评分标准】1-3分：琐碎日常；4-6分：有价值的偏好；7-8分：重要情感承诺；9-10分：核心转折。\n请输出严格 JSON：\n{"memories": [{"content": "记忆内容", "importance": 8}]}` },
+        { role: 'user', content: toExtract.map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n') }
+      ];
+
+      await streamRequest(prompt, async (jsonStr) => {
+        try {
+          const result = JSON.parse(jsonStr.match(/\{[\s\S]*\}/)[0]);
+          if (result.memories && Array.isArray(result.memories)) {
+            for (let m of result.memories) {
+              const vector = await getEmbedding(m.content);
+              memoryBank.value.push({ id: Date.now().toString() + Math.random(), content: m.content, importance: m.importance || 5, vector: vector, createdAt: Date.now(), lastAccessed: Date.now() });
+            }
+            await saveMemoryBank(); cleanMemoryBank(); 
+          }
+        } catch (e) { console.error("提取记忆失败", e); }
+      }, () => { isSummarizing.value = false; }, true, 'deepseek-chat');
+    }
+
+    function cleanMemoryBank() {
+      const now = Date.now();
+      memoryBank.value = memoryBank.value.filter(m => !(Math.exp(-((now - m.lastAccessed) / (1000 * 60 * 60 * 24)) / 30) < 0.05 && m.importance < 7));
+      if (memoryBank.value.length > 100) {
+        memoryBank.value.sort((a, b) => b.importance - a.importance || b.lastAccessed - a.lastAccessed);
+        memoryBank.value = memoryBank.value.slice(0, 100);
+      }
+      saveMemoryBank();
+    }
+
+    async function deleteMemory(index) { if(confirm("确定要抹除她脑海里的这段记忆吗？")) { memoryBank.value.splice(index, 1); await saveMemoryBank(); } }
+
+    // ================= 通用请求 =================
     function startLoadingText(pad) {
       stopLoadingText();
       const base = ['TA正在思考怎么回复你', '似乎在斟酌用词', '安静了一会儿', '像是在组织语言'];
@@ -622,7 +628,6 @@ createApp({
     }
     function stopLoadingText() { if (loadingTimer) { clearInterval(loadingTimer); loadingTimer = null; } }
 
-    // ================= 通用 API 请求 =================
     async function streamRequest(payloadMessages, onDelta, onFinish, isJson = false, modelName = 'deepseek-chat', onReasoning = null) {
       try {
         const res = await fetch('https://api.deepseek.com/chat/completions', {
@@ -651,36 +656,84 @@ createApp({
     }
 
     // ================= 导演 & 演员 核心流程 =================
-    async function performDirectorAndActor(userText, aiIdx, onComplete) {
+    async function performDirectorAndActor(userText, aiIdx, onComplete, contextType = 'chat') {
       const pad = getPAD();
+      const trust = getTrust();
       const timeString = getCurrentTimeString();
       const charName = cfg.value.name || 'AI';
       
       const recalledMemory = await searchMemories(userText);
-      const recentForDirector = messages.value.slice(0, aiIdx).slice(-3).map(m => `${m.role === 'user' ? 'TA' : charName}: ${m.content}`).join('\n');
+      messages.value[aiIdx].recalled_memory = recalledMemory; // 挂载记忆
+
+      // 动态世界线
+      let growthContext = "";
+      if (cfg.value.enableGrowth) {
+        const currentRole = roleList.value.find(r => r.id === activeRoleId.value);
+        const daysKnown = Math.max(1, Math.ceil((Date.now() - (currentRole?.createdAt || Date.now())) / (1000 * 60 * 60 * 24)));
+        growthContext = `\n【世界线时间】你们已经相识了 ${daysKnown} 天。`;
+        if (daysKnown > 30) growthContext += `\n【成长提示】随时间推移，你的外貌/心智可能成熟了，请在动作描写中自然体现。`;
+      }
+
+      let extraRules = "";
+      if (contextType === 'weather') {
+        extraRules = `\n【特殊环境规则（天气事件）】\n请阅读【角色设定】，判断该天气是否讨你（角色）喜欢。喜欢则 P 涨，讨厌则 P 跌。必须带上强烈的主观情绪。`;
+      } else if (contextType === 'auto') {
+        extraRules = `\n【特殊环境规则（主动搭话）】\n玩家并没有发消息，是你主动找 TA。请表现出孤独感或思念，用日常分享来破冰。`;
+      }
+
+      // 构建导演 Prompt (上下文 8 条)
+      const recentForDirector = messages.value.slice(0, aiIdx).slice(-8).map(m => `${m.role === 'user' ? 'TA' : charName}: ${m.content}`).join('\n');
 
       const directorPrompt = [
-        { role: 'system', content: `你是角色「${charName}」的潜意识。你精通 OCC 认知评估心理学。\n【角色设定】\n${cfg.value.system}\n【日常性格基线】P:${cfg.value.baselinePAD.P}, A:${cfg.value.baselinePAD.A}, D:${cfg.value.baselinePAD.D}\n【当前状态】PAD: ${JSON.stringify(pad)}。时间: ${timeString}。\n【最近前情】\n${recentForDirector || '无'}\n【你脑海中浮现的往事】\n${recalledMemory}\n\n请对玩家的话进行 OCC 认知评估，计算 PAD 影响，并给出躯体化感受。\n输出严格 JSON：\n{"delta_PAD": {"P": 0, "A": 0, "D": 0},"occ_emotion": "两字情绪","occ_reason": "原因","director_script": "躯体化感受"}` },
+        { role: 'system', content: `你是角色「${charName}」的潜意识。你精通 OCC 认知评估心理学。
+【基础设定】\n${cfg.value.system}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n${growthContext}
+【当前状态】PAD: ${JSON.stringify(pad)}。信任度: ${trust}/100。时间: ${timeString}。
+【最近前情】\n${recentForDirector || '无'}\n【你脑海中浮现的往事】\n${recalledMemory}\n
+${extraRules}
+
+请对玩家的话进行 OCC 认知评估。
+【PAD 变化量量表】：
+- 日常寒暄/微小波动：-5 到 +5。
+- 情感起伏/开心或难过：-20 到 +20。
+- 核心转折/强烈情绪：-50 到 +50。
+【Trust 变化】：如果被关心+1~+3，被敷衍/伤害-3~-10。
+
+输出严格 JSON：
+{
+  "delta_PAD": {"P": 0, "A": 0, "D": 0},
+  "delta_trust": 0,
+  "occ_emotion": "4到8字的情绪标签",
+  "occ_reason": "原因",
+  "director_script": "躯体化感受"
+}` },
         { role: 'user', content: userText }
       ];
 
       await streamRequest(directorPrompt, (jsonStr) => {
-        let result = { delta_PAD: {}, occ_emotion: "微澜", occ_reason: "心底泛起涟漪", director_script: "你心里泛起波澜，不知怎么回应。" };
+        let result = { delta_PAD: {}, delta_trust: 0, occ_emotion: "微澜", occ_reason: "心底泛起涟漪", director_script: "你心里泛起波澜，不知怎么回应。" };
         try {
           const match = jsonStr.match(/\{[\s\S]*\}/);
           if (match) result = JSON.parse(match[0]);
           
           let newPad = { P: pad.P + (result.delta_PAD?.P || 0), A: pad.A + (result.delta_PAD?.A || 0), D: pad.D + (result.delta_PAD?.D || 0) };
           localStorage.setItem(getKey('ai_pad'), JSON.stringify(newPad));
+          currentPAD.value = newPad;
+
+          let newTrust = Math.max(0, Math.min(100, trust + (result.delta_trust || 0)));
+          localStorage.setItem(getKey('ai_trust'), newTrust);
+          currentTrust.value = newTrust;
+
           messages.value[aiIdx].occ_emotion = result.occ_emotion;
         } catch (e) { console.warn("导演解析失败", e); }
         
         const subconsciousWhisper = `你感到一阵【${result.occ_emotion}】，因为${result.occ_reason}。你的身体不由得做出了反应：${result.director_script}`;
         
-        const actorHistory = messages.value.slice(0, aiIdx).slice(-10).map(m => ({ role: m.role, content: m.content }));
+        // 构建演员 Prompt (上下文 4 条)
+        const actorHistory = messages.value.slice(0, aiIdx).slice(-4).map(m => ({ role: m.role, content: m.content }));
+        let trustLevelText = trust <= 20 ? "戒备期，不敢靠近" : (trust <= 50 ? "熟悉期，开始依赖" : "亲密期，极度黏人");
 
         const actorPrompt = [
-          { role: 'system', content: `${cfg.value.system}\n【最高指令】\n1. 绝对不要出戏，不要提及“剧本”、“情绪标签”等系统词汇。\n2. 结合场景与内在状态，给出符合设定的极简微动作和台词。字越少越好。` },
+          { role: 'system', content: `${cfg.value.system}\n${cfg.value.dynamicTrait ? '【当前心智】'+cfg.value.dynamicTrait : ''}\n【关系阶段】：${trustLevelText}\n【输出格式】：必须严格遵循（动作/神态）+ 语言台词。非语言全部放全角括号内。绝不要长篇大论。` },
           ...actorHistory,
           { role: 'user', content: `【刚刚发生的事】\n他对你说：“${userText}”。\n\n【你瞬间的直觉】\n${subconsciousWhisper}\n\n请输出你的微动作和极简台词：` }
         ];
@@ -697,43 +750,171 @@ createApp({
       }, null, true, 'deepseek-chat');
     }
 
-    // ================= 情感基线提取 =================
-    async function generateBaselinePAD() {
-      if (!cfg.value.apiKey) return alert("请先填写 API Key！");
-      if (!cfg.value.system || cfg.value.system.trim() === '') return alert("请先填写角色设定！");
-      
-      isGeneratingBaseline.value = true;
+    // ================= 人设转化与情感基线 =================
+    async function optimizePersona() {
+      if (!cfg.value.apiKey || !cfg.value.system.trim()) return alert("请先填写 API Key 和基础设定！");
+      isOptimizing.value = true;
       const prompt = [
-        { role: 'system', content: `你是专业的角色心理学分析师。阅读角色设定，分析其默认 PAD 基线。P(愉悦度), A(唤醒度/精力), D(支配度/强势)。输出严格 JSON: {"P": 0, "A": 0, "D": 0, "reason": "理由"}` }, 
+        { role: 'system', content: `你是顶级角色卡设计师。将用户输入的【原始人设】，重构为严格标签化的两段内容。
+1. base_persona：不可变的外貌、身份。使用标签格式（【外貌】xxx 【身份】xxx）。
+2. initial_trait：可变的性格、偏好。使用标签格式（【性格】xxx 【偏好】xxx）。
+请输出严格 JSON：{"base_persona": "...", "initial_trait": "..."}` },
         { role: 'user', content: cfg.value.system }
       ];
-
       await streamRequest(prompt, (jsonStr) => {
         try {
-          if (jsonStr.includes('[出错]')) throw new Error("API 报错，请检查 Key 或网络");
-          const match = jsonStr.match(/\{[\s\S]*\}/);
-          if (!match) throw new Error("模型未返回 JSON 结构");
-          
-          const result = JSON.parse(match[0]);
-          cfg.value.baselinePAD = { P: result.P || 0, A: result.A || 0, D: result.D || 0 };
-          saveCfg(); 
-          alert(`感知完毕：P:${cfg.value.baselinePAD.P}, A:${cfg.value.baselinePAD.A}, D:${cfg.value.baselinePAD.D}\n理由：${result.reason || '无'}`);
-        } catch (e) { 
-          alert("感知失败！\n原因：" + e.message); 
-        }
+          const result = JSON.parse(jsonStr.match(/\{[\s\S]*\}/)[0]);
+          cfg.value.system = result.base_persona;
+          cfg.value.dynamicTrait = result.initial_trait;
+          saveCfg(); alert("✨ 人设转化成功！");
+        } catch (e) { alert("转化失败"); }
+      }, () => { isOptimizing.value = false; }, true, 'deepseek-chat');
+    }
+
+    async function generateBaselinePAD() {
+      if (!cfg.value.apiKey || !cfg.value.system.trim()) return alert("请先填写 API Key 和人设！");
+      isGeneratingBaseline.value = true;
+      const prompt = [
+        { role: 'system', content: `你是角色心理学分析师。阅读人设，分析默认 PAD 基线（-100 到 100 的整数）。
+【量表】：P: -100抑郁到+100狂喜；A: -100死气沉沉到+100暴躁；D: -100卑微到+100控制狂。
+输出 JSON: {"P": 0, "A": 0, "D": 0, "reason": "理由"}` }, 
+        { role: 'user', content: cfg.value.system }
+      ];
+      await streamRequest(prompt, (jsonStr) => {
+        try {
+          const result = JSON.parse(jsonStr.match(/\{[\s\S]*\}/)[0]);
+          let p = Number(result.P) || 0; let a = Number(result.A) || 0; let d = Number(result.D) || 0;
+          if (Math.abs(p) <= 1 && p !== 0) p = p * 100; if (Math.abs(a) <= 1 && a !== 0) a = a * 100; if (Math.abs(d) <= 1 && d !== 0) d = d * 100;
+          cfg.value.baselinePAD = { P: Math.round(Math.max(-100, Math.min(100, p))), A: Math.round(Math.max(-100, Math.min(100, a))), D: Math.round(Math.max(-100, Math.min(100, d))) };
+          saveCfg(); alert(`感知完毕：P:${cfg.value.baselinePAD.P}, A:${cfg.value.baselinePAD.A}, D:${cfg.value.baselinePAD.D}`);
+        } catch (e) { alert("感知失败"); }
       }, () => { isGeneratingBaseline.value = false; }, true, 'deepseek-chat');
     }
 
-    // ================= 其他辅助逻辑 =================
-    const clear = async () => { 
-      if(!confirm("确定清空当前角色的对话吗？")) return;
-      messages.value = []; branches.value = []; memoryBank.value = [];
-      await saveMessages(); await saveBranches(); await saveMemoryBank();
-      localStorage.removeItem(getKey('lastMessageTime')); 
-      localStorage.removeItem(getKey('ai_pad'));
-      clearInactivityTimer(); clearSecondMessageTimer();
+    // ================= 天气系统 =================
+    function getWeatherDescByWMO(code) {
+      const map = {0: '晴朗', 1: '大部晴朗', 2: '局部多云', 3: '阴天', 45: '雾', 48: '沉积雾', 51: '小毛毛雨', 53: '中等毛毛雨', 55: '大毛毛雨', 61: '小雨', 63: '中雨', 65: '大雨', 71: '小雪', 73: '中雪', 75: '大雪', 80: '小阵雨', 81: '中阵雨', 82: '强阵雨', 95: '雷暴'};
+      return map[code] || '未知天气';
+    }
+
+    async function fetchRealWeather() {
+      const now = Date.now();
+      const cached = localStorage.getItem(getKey('weather_cache'));
+      const cacheTime = parseInt(localStorage.getItem(getKey('weather_time'))) || 0;
+      if (cached && (now - cacheTime < 30 * 60 * 1000)) return JSON.parse(cached);
+
+      let lat = 39.9042, lon = 116.4074;
+      try {
+        const locRes = await fetch('https://ipapi.co/json/');
+        if (locRes.ok) { const d = await locRes.json(); lat = d.latitude || lat; lon = d.longitude || lon; }
+      } catch (e) { console.warn("IP定位失败"); }
+
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&timezone=auto`);
+        const data = await res.json();
+        const result = { weatherDesc: getWeatherDescByWMO(data.current.weather_code), temp: data.current.temperature_2m, humidity: data.current.relative_humidity_2m, windSpeed: data.current.wind_speed_10m };
+        localStorage.setItem(getKey('weather_cache'), JSON.stringify(result));
+        localStorage.setItem(getKey('weather_time'), now.toString());
+        return result;
+      } catch (e) { throw new Error("天气数据获取失败"); }
+    }
+
+    async function triggerWeather() {
+      if (loading.value || !cfg.value.apiKey) return;
+      loading.value = true; const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+      const pad = getPAD(); startLoadingText(pad);
+      messages.value[idx].content = "（走到窗边，抬头看了看天空……）";
+      
+      let eventText = "";
+      try {
+        const weatherData = await fetchRealWeather();
+        messages.value[idx].content = ""; 
+        eventText = `（系统天气事件：玩家让你看看窗外的天气。你查了一下，现在外面是【${weatherData.weatherDesc}】，气温【${weatherData.temp}℃】，湿度【${weatherData.humidity}%】，风速【${weatherData.windSpeed}km/h】。请根据你的【角色设定】，评估这个天气对你的影响，并主动对玩家表达感受。）`;
+      } catch (e) {
+        messages.value[idx].content = ""; 
+        eventText = `（系统天气事件：玩家让你看看窗外的天气。但你感知不到具体的天气，请向玩家表达你感受不到外界天气的迷茫，并问问玩家那边天气怎么样。）`;
+      }
+      await performDirectorAndActor(eventText, idx, async () => { await saveMessages(); }, 'weather');
+    }
+
+    // ================= 日记与演化 =================
+    async function autoSleepJournal() {
+      if (isAutoJournaling.value || loading.value || !cfg.value.apiKey) return;
+      const todayStr = new Date().toLocaleDateString();
+      if (localStorage.getItem(getKey('lastAutoJournalDate')) === todayStr) return;
+
+      // 提取 24 小时内的记忆
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const recentMemories = memoryBank.value.filter(m => m.createdAt > oneDayAgo && m.importance >= 4).sort((a, b) => b.importance - a.importance).slice(0, 10);
+      const highlightMemories = memoryBank.value.filter(m => m.importance >= 9 && m.createdAt <= oneDayAgo).sort((a, b) => b.createdAt - a.createdAt).slice(0, 2);
+      
+      const finalMemories = [...new Set([...recentMemories, ...highlightMemories])].map(m => `- [重要度${m.importance}] ${m.content}`).join('\n');
+      const recentChat = messages.value.slice(-10).map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n');
+      
+      if (!finalMemories && !recentChat) return; 
+      isAutoJournaling.value = true;
+
+      const prompt = [
+        { role: 'system', content: `你现在的身份是「${cfg.value.name}」。请根据素材完成：
+1. 【写日记】将重点放在“印象最深的事情”上，字数 100-150 字。
+2. 【心智演化】分析心态变化。不超过 100 字。
+输出严格 JSON：{"diary": "...", "new_trait": "..."}` },
+        { role: 'user', content: `【印象最深的事情】\n${finalMemories || '无'}\n\n【最近日常】\n${recentChat}` }
+      ];
+
+      try {
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
+          body: JSON.stringify({ model: 'deepseek-chat', messages: prompt, response_format: { type: "json_object" } })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const result = JSON.parse(data.choices[0].message.content.match(/\{[\s\S]*\}/)[0]);
+          const now = new Date(); const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+          diaryLogs.value = diaryLogs.value.filter(log => log.date !== dateStr);
+          diaryLogs.value.unshift({ date: dateStr, content: result.diary, timestamp: Date.now() });
+          await saveDiary();
+          if (result.new_trait) { cfg.value.dynamicTrait = result.new_trait; await saveCfg(); }
+          localStorage.setItem(getKey('lastAutoJournalDate'), todayStr);
+        }
+      } catch (e) { console.error(e); } finally { isAutoJournaling.value = false; }
+    }
+
+    // ================= 角色管理 =================
+    const switchRole = async (id) => {
+      if (id === activeRoleId.value) { showSidebar.value = false; return; }
+      if (loading.value) return alert("正在回复中，请稍等...");
+      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
+      activeRoleId.value = id; localStorage.setItem('active_role_id', id);
+      await loadRoleData();
+      showSidebar.value = false; showSettings.value = false;
+      stopLoadingText(); clearInactivityTimer(); clearSecondMessageTimer();
+      if (padTickTimer) clearInterval(padTickTimer); padTickTimer = setInterval(tickPAD, 60000);
+      nextTick(() => { toBottom(); if (cfg.value.apiKey) checkAndTriggerGreeting(); });
     };
 
+    const addNewRole = async () => {
+      if (loading.value) return;
+      await saveCfg(); await saveMessages(); await saveBranches(); await saveDiary(); await saveMemoryBank();
+      const newId = Date.now().toString();
+      roleList.value.push({ id: newId, name: '新角色', enableGrowth: false, createdAt: Date.now() });
+      localStorage.setItem('role_list', JSON.stringify(roleList.value));
+      await dbSet(`role_${newId}_cfg`, { apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } });
+      switchRole(newId); showSettings.value = true;
+    };
+
+    const deleteRole = async () => {
+      if (roleList.value.length <= 1) return alert("至少要保留一个角色哦！");
+      if (!confirm(`确定要彻底删除角色「${cfg.value.name}」吗？`)) return;
+      const idToDelete = activeRoleId.value;
+      await dbDel(`role_${idToDelete}_cfg`); await dbDel(`role_${idToDelete}_messages`); await dbDel(`role_${idToDelete}_branches`); await dbDel(`role_${idToDelete}_diaryLogs`); await dbDel(`role_${idToDelete}_memoryBank`);
+      roleList.value = roleList.value.filter(r => r.id !== idToDelete); localStorage.setItem('role_list', JSON.stringify(roleList.value));
+      switchRole(roleList.value[0].id);
+    };
+
+    // ================= 其它辅助逻辑 =================
+    const clear = async () => { if(!confirm("确定清空当前角色的对话吗？")) return; messages.value = []; branches.value = []; memoryBank.value = []; await saveMessages(); await saveBranches(); await saveMemoryBank(); localStorage.removeItem(getKey('lastMessageTime')); localStorage.removeItem(getKey('ai_pad')); clearInactivityTimer(); clearSecondMessageTimer(); };
     const getAvatarChar = (name) => { if (!name) return '?'; return name.trim().charAt(0).toUpperCase(); };
     async function toBottom() { await nextTick(); if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight; }
 
@@ -744,10 +925,7 @@ createApp({
       const recentChat = messages.value.slice(-30).map(m => `${m.role === 'user' ? 'TA' : cfg.value.name}: ${m.content}`).join('\n');
       const prompt = `你现在的身份是「${cfg.value.name}」。\n请根据今天的聊天记录，以第一人称口吻写一篇 150-200 字的日记。直接输出正文。\n${recentChat}`;
       try {
-        const res = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
-          body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'system', content: cfg.value.system }, { role: 'user', content: prompt }] })
-        });
+        const res = await fetch('https://api.deepseek.com/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey }, body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'system', content: cfg.value.system }, { role: 'user', content: prompt }] }) });
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         const now = new Date(); const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
@@ -757,22 +935,6 @@ createApp({
       } catch (e) { alert("写日记失败了：" + e.message); } finally { isGeneratingDiary.value = false; }
     }
 
-    const getCurrentTimeString = () => {
-      const now = new Date(); const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-      const year = now.getFullYear(); const month = now.getMonth() + 1; const date = now.getDate(); const day = weekdays[now.getDay()];
-      const hours = now.getHours().toString().padStart(2, '0'); const minutes = now.getMinutes().toString().padStart(2, '0');
-      let period = "深夜"; if (hours >= 5 && hours < 9) period = "早晨"; else if (hours >= 9 && hours < 12) period = "上午"; else if (hours >= 12 && hours < 14) period = "中午"; else if (hours >= 14 && hours < 18) period = "下午"; else if (hours >= 18 && hours < 23) period = "晚上";
-      return `${year}年${month}月${date}日 ${day} ${period}${hours}:${minutes}`;
-    };
-
-    const buildMessagesForAI = (historyMessages, maxTurns = 15) => {
-      const recentHistory = historyMessages.slice(-maxTurns).map(m => ({ role: m.role, content: m.content }));
-      let systemPrompt = cfg.value.system;
-      systemPrompt += `\n\n【当前时间】${getCurrentTimeString()}。`;
-      systemPrompt += `\n\n【通用规则】请使用“你”来称呼玩家。用“TA”指代玩家。`;
-      return [{ role: 'system', content: systemPrompt }, ...recentHistory];
-    };
-
     const clearInactivityTimer = () => { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } };
     const clearSecondMessageTimer = () => { if (secondMessageTimer) { clearTimeout(secondMessageTimer); secondMessageTimer = null; } };
     const startInactivityTimer = () => { clearInactivityTimer(); inactivityTimer = setTimeout(triggerInactivitySequence, 120000); };
@@ -780,68 +942,28 @@ createApp({
     async function triggerInactivitySequence() {
       clearInactivityTimer(); clearSecondMessageTimer();
       const lastMsg = messages.value[messages.value.length - 1];
-      if (!lastMsg || lastMsg.role !== 'user' || loading.value || !cfg.value.apiKey) return;
-      loading.value = true; const idx = messages.value.length;
-      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
+      if (!lastMsg || lastMsg.role !== 'assistant' || loading.value || !cfg.value.apiKey) return;
       
-      const promptForFirst = buildMessagesForAI(messages.value.slice(0, idx), 10);
-      promptForFirst.push({ role: 'user', content: '（系统提示：玩家很久没回了。以角色身份发一条消息，表达想法感受，动作描写符合人设，1-2句话。）' });
-      
-      try {
-        const res = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
-          body: JSON.stringify({ model: 'deepseek-chat', stream: true, messages: promptForFirst })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = '';
-        while (true) {
-          const { done, value } = await reader.read(); if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n'); buf = lines.pop();
-          for (const line of lines) {
-            const s = line.trim(); if (!s.startsWith('data:')) continue;
-            const data = s.slice(5).trim(); if (data === '[DONE]') continue;
-            try { const delta = JSON.parse(data).choices?.[0]?.delta?.content; if (delta) { messages.value[idx].content += delta; toBottom(); } } catch (e) { }
-          }
-        }
-      } catch (e) {
-        if (messages.value[idx]) messages.value[idx].content += '\n\n[出错] ' + e.message;
-      } finally {
-        loading.value = false; await saveMessages(); toBottom();
+      const idx = messages.value.length;
+      messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); 
+      toBottom(); loading.value = true; const pad = getPAD(); startLoadingText(pad);
+
+      // 走完整的导演-演员流程，事件类型为 auto
+      const eventText = `（系统事件：玩家已经有一段时间没有回复你了。请根据你现在的 PAD 情绪，以角色身份主动给 TA 发一条消息。表达你此刻的想法或感受，不要直接问 TA 在不在。动作描写要符合人设，1-2句话。）`;
+
+      await performDirectorAndActor(eventText, idx, async () => { 
+        await saveMessages();
         secondMessageTimer = setTimeout(async () => {
           const latestMsg = messages.value[messages.value.length - 1];
           if (latestMsg && latestMsg.role === 'assistant' && !loading.value) {
-            loading.value = true; const newIdx = messages.value.length;
+            const newIdx = messages.value.length;
             messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-            
-            const promptForSecond = buildMessagesForAI(messages.value.slice(0, newIdx), 10);
-            promptForSecond.push({ role: 'user', content: '（系统提示：玩家仍没回。再发一条消息问TA在不在，1句话。）' });
-            
-            try {
-              const res = await fetch('https://api.deepseek.com/chat/completions', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
-                body: JSON.stringify({ model: 'deepseek-chat', stream: true, messages: promptForSecond })
-              });
-              if (!res.ok) throw new Error(await res.text());
-              const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = '';
-              while (true) {
-                const { done, value } = await reader.read(); if (done) break;
-                buf += decoder.decode(value, { stream: true });
-                const lines = buf.split('\n'); buf = lines.pop();
-                for (const line of lines) {
-                  const s = line.trim(); if (!s.startsWith('data:')) continue;
-                  const data = s.slice(5).trim(); if (data === '[DONE]') continue;
-                  try { const delta = JSON.parse(data).choices?.[0]?.delta?.content; if (delta) { messages.value[newIdx].content += delta; toBottom(); } } catch (e) { }
-                }
-              }
-            } catch (e) {
-              if (messages.value[newIdx]) messages.value[newIdx].content += '\n\n[出错] ' + e.message;
-            } finally {
-              loading.value = false; await saveMessages(); toBottom();
-            }
+            loading.value = true; const pad2 = getPAD(); startLoadingText(pad2);
+            const eventText2 = `（系统事件：玩家仍然没有回复你的第一条消息。请再发一条消息，问问 TA 在不在，语气要带一点小心或者委屈，1句话。）`;
+            await performDirectorAndActor(eventText2, newIdx, async () => { await saveMessages(); }, 'auto');
           }
-        }, 120000);
-      }
+        }, 240000);
+      }, 'auto');
     }
 
     const startEdit = (index) => { if (loading.value) return; editingIndex.value = index; editInput.value = messages.value[index].content; };
@@ -849,17 +971,14 @@ createApp({
 
     const saveEdit = async (index) => {
       const newText = editInput.value.trim(); if (!newText) return;
-      if (newText.length > 2000) return alert("话太长啦，AI 可能记不住，请分段发送。");
-      
+      if (newText.length > 2000) return alert("话太长啦，请分段发送。");
       const oldTimeline = JSON.parse(JSON.stringify(messages.value));
       messages.value[index].content = newText;
       messages.value[index].timestamp = Date.now();
       messages.value = messages.value.slice(0, index + 1);
       editingIndex.value = -1; editInput.value = ''; loading.value = true; await saveMessages();
-      
       const aiIdx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
-      
       const pad = getPAD(); startLoadingText(pad);
       await performDirectorAndActor(newText, aiIdx, async () => {
         const newTimeline = JSON.parse(JSON.stringify(messages.value));
@@ -893,56 +1012,33 @@ createApp({
 
     async function triggerGreeting() {
       if (loading.value || !cfg.value.apiKey) return;
-      loading.value = true;
       const now = Date.now(); const lastTime = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
       const diffMs = now - lastTime;
       let timeAgoText = "";
-      if (lastTime === 0) timeAgoText = "这是你们第一次见面";
-      else if (diffMs < 60 * 1000) timeAgoText = "刚刚才发过消息，又回来了";
-      else if (diffMs < 60 * 60 * 1000) timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (60 * 1000))} 分钟`;
-      else if (diffMs < 24 * 60 * 60 * 1000) timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (60 * 60 * 1000))} 个小时`;
-      else timeAgoText = `距离上次发消息已经过去了大约 ${Math.floor(diffMs / (24 * 60 * 60 * 1000))} 天`;
+      if (lastTime === 0) timeAgoText = "这是你们第一次见面。";
+      else if (diffMs < 60 * 1000) timeAgoText = "刚刚才发过消息，他又回来了。";
+      else if (diffMs < 60 * 60 * 1000) timeAgoText = `距离上次发消息已经过去了 ${Math.floor(diffMs / (60 * 1000))} 分钟。`;
+      else if (diffMs < 24 * 60 * 60 * 1000) timeAgoText = `距离上次发消息已经过去了 ${Math.floor(diffMs / (60 * 60 * 1000))} 个小时。`;
+      else timeAgoText = `距离上次发消息已经过去了 ${Math.floor(diffMs / (24 * 60 * 60 * 1000))} 天。`;
 
+      const eventText = `（系统事件：玩家打开了聊天界面。当前状态：【${timeAgoText}】。请根据你当前的 PAD 情绪，主动向玩家打招呼。）`;
       const idx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() }); toBottom();
       
-      const promptForAI = buildMessagesForAI(messages.value.slice(0, idx), 10);
-      promptForAI.push({ role: 'user', content: `（系统提示：玩家打开了聊天界面。当前状态：【${timeAgoText}】。请以角色身份主动向玩家打招呼，自然表现出相应的情绪。用“你”称呼玩家，用“TA”指代玩家。）` });
-      
-      try {
-        const res = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey },
-          body: JSON.stringify({ model: 'deepseek-chat', stream: true, messages: promptForAI })
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const reader = res.body.getReader(); const decoder = new TextDecoder(); let buf = '';
-        while (true) {
-          const { done, value } = await reader.read(); if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n'); buf = lines.pop();
-          for (const line of lines) {
-            const s = line.trim(); if (!s.startsWith('data:')) continue;
-            const data = s.slice(5).trim(); if (data === '[DONE]') continue;
-            try { const delta = JSON.parse(data).choices?.[0]?.delta?.content; if (delta) { messages.value[idx].content += delta; toBottom(); } } catch (e) { }
-          }
-        }
-      } catch (e) {
-        messages.value[idx].content += '\n\n[出错] ' + e.message;
-      } finally {
-        loading.value = false; await saveMessages(); localStorage.setItem(getKey('lastMessageTime'), Date.now()); toBottom(); startInactivityTimer();
-      }
+      loading.value = true; const pad = getPAD(); startLoadingText(pad);
+      await performDirectorAndActor(eventText, idx, async () => { 
+        await saveMessages(); 
+        localStorage.setItem(getKey('lastMessageTime'), Date.now());
+        startInactivityTimer();
+      }, 'auto');
     }
 
     onMounted(async () => {
       await initApp();
-      getPAD();
-      initEmbeddingModel();
-      
-      if (padTickTimer) clearInterval(padTickTimer);
-      padTickTimer = setInterval(tickPAD, 60000);
-
-      isAppReady.value = true; // ✨ 加载完毕解锁
-
+      getPAD(); initEmbeddingModel();
+      if (padTickTimer) clearInterval(padTickTimer); padTickTimer = setInterval(tickPAD, 60000);
+      isAppReady.value = true; 
+      await autoSleepJournal();
       if (cfg.value.apiKey) checkAndTriggerGreeting();
       document.addEventListener('visibilitychange', handleVisibilityChange);
     });
@@ -957,38 +1053,35 @@ createApp({
     const checkAndTriggerGreeting = () => {
       if (loading.value || !cfg.value.apiKey) return;
       const lastLeaveTime = parseInt(localStorage.getItem('lastLeaveTime')) || 0;
-      if (lastLeaveTime === 0 || (Date.now() - lastLeaveTime > 20 * 60 * 1000)) triggerGreeting();
+      const lastMsgTime = parseInt(localStorage.getItem(getKey('lastMessageTime'))) || 0;
+      if ((lastLeaveTime > 0 && Date.now() - lastLeaveTime > 20 * 60 * 1000) || (lastMsgTime > 0 && Date.now() - lastMsgTime > 20 * 60 * 1000)) triggerGreeting();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         localStorage.setItem('lastLeaveTime', Date.now());
       } else if (document.visibilityState === 'visible') {
-        getPAD();
-        checkAndTriggerGreeting();
+        getPAD(); checkAndTriggerGreeting();
+        const lastMsg = messages.value[messages.value.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') startInactivityTimer();
       }
     };
 
-    // ================= 全量级系统备份与恢复 =================
+    // ================= 全量备份导出 =================
     const exportData = async () => {
       try {
         const backup = { roleList: roleList.value, activeRoleId: activeRoleId.value, rolesData: {} };
         for (const role of roleList.value) {
           backup.rolesData[role.id] = {
-            cfg: await dbGet(`role_${role.id}_cfg`, null),
-            messages: await dbGet(`role_${role.id}_messages`, []),
-            branches: await dbGet(`role_${role.id}_branches`, {}),
-            diaryLogs: await dbGet(`role_${role.id}_diaryLogs`, []),
-            memoryBank: await dbGet(`role_${role.id}_memoryBank`, []),
-            lastMessageTime: localStorage.getItem(`role_${role.id}_lastMessageTime`) || null,
-            ai_pad: localStorage.getItem(`role_${role.id}_ai_pad`) || null
+            cfg: await dbGet(`role_${role.id}_cfg`, null), messages: await dbGet(`role_${role.id}_messages`, []), branches: await dbGet(`role_${role.id}_branches`, {}),
+            diaryLogs: await dbGet(`role_${role.id}_diaryLogs`, []), memoryBank: await dbGet(`role_${role.id}_memoryBank`, []),
+            lastMessageTime: localStorage.getItem(`role_${role.id}_lastMessageTime`) || null, ai_pad: localStorage.getItem(`role_${role.id}_ai_pad`) || null,
+            ai_trust: localStorage.getItem(`role_${role.id}_ai_trust`) || null
           };
         }
         const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `AiTalk_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-        alert("全量备份导出成功！");
+        const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `AiTalk_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); alert("全量备份导出成功！");
       } catch (err) { alert("导出失败：" + err.message); }
     };
 
@@ -999,17 +1092,14 @@ createApp({
         try {
           const data = JSON.parse(e.target.result);
           if (!data.roleList || !data.rolesData) throw new Error("文件格式不对。");
-          if (!confirm("⚠️ 警告：这将覆盖你当前设备上的所有角色与记忆，确定要恢复吗？")) return;
+          if (!confirm("⚠️ 警告：这将覆盖当前数据，确定要恢复吗？")) return;
           for (const role of data.roleList) {
-            const d = data.rolesData[role.id];
-            if (!d) continue;
-            await dbSet(`role_${role.id}_cfg`, d.cfg);
-            await dbSet(`role_${role.id}_messages`, d.messages);
-            await dbSet(`role_${role.id}_branches`, d.branches);
-            await dbSet(`role_${role.id}_diaryLogs`, d.diaryLogs);
-            await dbSet(`role_${role.id}_memoryBank`, d.memoryBank || []);
+            const d = data.rolesData[role.id]; if (!d) continue;
+            await dbSet(`role_${role.id}_cfg`, d.cfg); await dbSet(`role_${role.id}_messages`, d.messages); await dbSet(`role_${role.id}_branches`, d.branches);
+            await dbSet(`role_${role.id}_diaryLogs`, d.diaryLogs); await dbSet(`role_${role.id}_memoryBank`, d.memoryBank || []);
             if (d.lastMessageTime) localStorage.setItem(`role_${role.id}_lastMessageTime`, d.lastMessageTime);
             if (d.ai_pad) localStorage.setItem(`role_${role.id}_ai_pad`, d.ai_pad);
+            if (d.ai_trust) localStorage.setItem(`role_${role.id}_ai_trust`, d.ai_trust);
           }
           localStorage.setItem('role_list', JSON.stringify(data.roleList));
           localStorage.setItem('active_role_id', data.activeRoleId || data.roleList[0].id);
@@ -1021,29 +1111,27 @@ createApp({
 
     async function send() {
       if (!isAppReady.value) return alert("数据加载中，请稍等...");
-      
       const text = input.value.trim(); if (!text || loading.value) return;
-      if (text.length > 2000) return alert("你的话太长啦，AI 可能记不住，请分段发送。");
-      
+      if (text.length > 2000) return alert("你的话太长啦，请分段发送。");
       input.value = '';
       messages.value.push({ role: 'user', content: text, timestamp: Date.now() });
       const aiIdx = messages.value.length;
       messages.value.push({ role: 'assistant', content: '', timestamp: Date.now() });
       loading.value = true; await saveMessages(); toBottom();
-      
       const pad = getPAD(); startLoadingText(pad);
       await performDirectorAndActor(text, aiIdx, async () => { await saveMessages(); });
     }
 
     return { 
-      cfg, messages, input, loading, loadingText, showSettings, listEl, 
+      cfg, messages, currentPAD, currentTrust, input, loading, loadingText, showSettings, listEl, 
       send, saveCfg, clear, getAvatarChar, regenerate, editingIndex, editInput, 
       startEdit, cancelEdit, saveEdit, branches, switchRoute, 
       showDiary, diaryLogs, isGeneratingDiary, generateDiary, 
-      exportData, importData, expandedReasoning,
-      generateBaselinePAD, isGeneratingBaseline,
-      showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole,
-      showTimeDivider, formatTime, isAppReady
+      exportData, importData, expandedReasoning, expandedMemory,
+      generateBaselinePAD, isGeneratingBaseline, isOptimizing, optimizePersona,
+      showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole, toggleGrowth,
+      showTimeDivider, formatTime, showAdvanced, showMemoryBank, getMemoryRetention, deleteMemory,
+      isAppReady, triggerWeather, formatMessage
     };
   }
 }).mount('#app');
