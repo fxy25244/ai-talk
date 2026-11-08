@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>あいTalk</title>
 <link rel="manifest" href="manifest.json">
-<!-- 引入外部依赖 -->
-<script src="https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/dist/umd.js" onerror="console.warn('idb-keyval 加载失败')"></script>
+<script src="https://cdn.jsdelivr.net/npm/idb-keyval@6.2.1/dist/umd.js"></script>
 <script>
   window.TransformersPipeline = null;
   const script = document.createElement('script');
@@ -17,8 +16,7 @@
       env.remoteHost = "https://hf-mirror.com";
       env.allowLocalModels = false;
       window.TransformersPipeline = pipeline;
-      console.log('✅ 向量模型加载成功');
-    } catch (e) { console.warn('⚠️ 向量模型加载失败'); }
+    } catch (e) { console.warn('向量模型加载失败'); }
   `;
   document.head.appendChild(script);
 </script>
@@ -28,7 +26,6 @@
   }
 </script>
 <style>
-/* --- 基础样式 --- */
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:-apple-system,"PingFang SC",sans-serif;background:#f5f5f7}
@@ -37,7 +34,6 @@ header{display:flex;align-items:center;gap:10px;padding:12px 16px;padding-top:ca
 .header-avatar{width:32px;height:32px;border-radius:50%;background:#e0f2fe;color:#0369a1;display:flex;justify-content:center;align-items:center;font-size:14px;font-weight:600;flex-shrink:0;cursor:pointer;user-select:none}
 header .title{flex:1;font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header button{background:none;border:none;font-size:14px;color:#555;cursor:pointer;padding:4px 8px;border-radius:6px}
-header button:hover{background:#f0f0f0}
 
 .sidebar-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 50; display: flex; }
 .sidebar { width: 260px; height: 100%; background: #fff; display: flex; flex-direction: column; animation: slideIn 0.3s ease-out; box-shadow: 2px 0 12px rgba(0,0,0,0.1); }
@@ -47,29 +43,19 @@ header button:hover{background:#f0f0f0}
 .sidebar-header button { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; }
 .role-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
 .role-group-title { font-size: 12px; color: #999; padding: 8px 12px 4px 12px; font-weight: 600; }
-.role-item { padding: 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background 0.2s; }
-.role-item:hover { background: #f5f5f7; }
+.role-item { padding: 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .role-item.active { background: #e0f2fe; color: #0369a1; font-weight: 600; }
 .role-item .avatar { width: 28px; height: 28px; border-radius: 50%; background: #eee; display: flex; justify-content: center; align-items: center; font-size: 12px; }
 .role-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn-add-role { margin: 16px; padding: 12px; background: #f0f8ff; color: #007aff; border: 1px dashed #007aff; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
 
+/* ✨ 核心修复：设置面板滑动 */
 .settings {
-  padding: 12px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: absolute;
-  top: 60px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow-y: auto; 
-  -webkit-overflow-scrolling: touch; 
-  z-index: 20;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee;
+  display: flex; flex-direction: column; gap: 8px;
+  position: absolute; top: 60px; left: 0; right: 0; bottom: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; 
+  z-index: 20; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   padding-bottom: calc(16px + env(safe-area-inset-bottom)); 
 }
 .settings label{display:flex;flex-direction:column;font-size:12px;color:#666;gap:4px}
@@ -79,10 +65,6 @@ header button:hover{background:#f0f0f0}
 .settings .btn-clear{padding:8px;border:none;border-radius:8px;background:#ffebeb;color:#ff3b30;font-size:14px;cursor:pointer;flex:1;margin-top:4px}
 .settings .btn-backup{padding:8px;border:none;border-radius:8px;background:#e8f5e9;color:#2e7d32;font-size:14px;cursor:pointer;flex:1}
 .settings .btn-restore{padding:8px;border:none;border-radius:8px;background:#fff3e0;color:#e65100;font-size:14px;cursor:pointer;flex:1}
-
-.collapse-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; margin-top: 12px; }
-.collapse-header { background: #f0f0f0; padding: 10px; font-size: 13px; font-weight: 600; color: #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-.collapse-body { padding: 12px; background: #fafafa; }
 
 main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .msg{display:flex;width:100%;}
@@ -101,30 +83,25 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .typing-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes blink { 0% { opacity: .2; } 20% { opacity: 1; } 100% { opacity: .2; } }
 .reasoning-container { margin-top: 6px; width: 100%; }
-.reasoning-toggle { background: none; border: none; font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; transition: color 0.2s; text-align: left;}
-.reasoning-toggle:hover { color: #007aff; }
-.reasoning-content { background: #fafafa; border-left: 3px solid #e0e0e0; padding: 8px 12px; border-radius: 4px 8px 8px 4px; font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.reasoning-toggle { background: none; border: none; font-size: 12px; color: #888; cursor: pointer; padding: 4px 0; text-align: left;}
+.reasoning-content { background: #fafafa; border-left: 3px solid #e0e0e0; padding: 8px 12px; border-radius: 4px 8px 8px 4px; font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; }
 .occ-badge { display: inline-block; font-size: 11px; color: #888; background: #e8e8e8; border-radius: 6px; padding: 2px 6px; margin-top: 4px; white-space: nowrap; }
 .edit-box { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-.edit-box textarea { width: 100%; padding: 10px; border: 1px solid #007aff; border-radius: 12px; font-size: 15px; font-family: inherit; resize: vertical; min-height: 60px; }
+.edit-box textarea { width: 100%; padding: 10px; border: 1px solid #007aff; border-radius: 12px; font-size: 15px; }
 .edit-btns { display: flex; gap: 8px; justify-content: flex-end; }
 .edit-btns button { padding: 6px 14px; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .btn-save { background: #007aff; color: #fff; }
 .btn-cancel { background: #eee; color: #333; }
 .action-btns { display: flex; gap: 4px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
-.action-btn { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all 0.2s; }
-.action-btn:hover { background: #f0f0f0; color: #333; }
+.action-btn { font-size: 12px; color: #888; background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
 .route-switcher { display: flex; align-items: center; gap: 6px; background: #f0f8ff; border: 1px solid #cce5ff; padding: 2px 8px; border-radius: 12px; font-size: 12px; color: #007aff; }
-.route-switcher button { background: none; border: none; color: #007aff; font-size: 14px; cursor: pointer; padding: 0 4px; }
 
 footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
 footer textarea{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:16px;font-family:inherit;resize:none;height:42px;line-height:20px}
 footer button{padding:0 18px;border:none;border-radius:20px;background:#007aff;color:#fff;font-size:15px;font-weight:500}
 footer button:disabled{opacity:.4}
-footer textarea:disabled { background: #f9f9f9; color: #999; }
 
-.diary-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
+.diary-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; display: flex; align-items: flex-end; justify-content: center; }
 .diary-panel { width: 100%; height: 80%; background: #fff; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; animation: slideUp 0.3s ease-out; overflow: hidden; max-width: 600px; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .diary-header { padding: 16px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
@@ -136,8 +113,7 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
 .diary-date { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; }
 .diary-text { font-size: 14px; line-height: 1.7; color: #333; white-space: pre-wrap; }
 .diary-footer { padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid #eee; background: #fff; display: flex; justify-content: center; }
-.btn-write-diary { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.btn-write-diary:disabled { opacity: 0.5; background: #ccc; }
+.btn-write-diary { width: 100%; padding: 12px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; }
 [v-cloak] { display: none; }
 </style>
 </head>
@@ -171,7 +147,6 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <label>DeepSeek API Key (必填)<input v-model="cfg.apiKey" @change="saveCfg" type="password" placeholder="sk-..."></label>
     <label>角色名<input v-model="cfg.name" @change="saveCfg" placeholder="例：基米"></label>
     
-    <!-- 玩家档案（关键：低频变动区） -->
     <div style="display:flex; gap:8px; margin-top: 4px;">
       <label style="flex:1;">玩家名字<input v-model="cfg.playerName" @change="saveCfg" placeholder="如：张三"></label>
       <label style="flex:1;">对你的称呼<input v-model="cfg.playerAddress" @change="saveCfg" placeholder="如：主人 / 哥哥"></label>
@@ -181,43 +156,51 @@ footer textarea:disabled { background: #f9f9f9; color: #999; }
     <textarea v-model="cfg.system" @change="saveCfg" placeholder="支持自然语言或标签格式。"></textarea>
 
     <label style="color: #ff3b30; font-weight: 600; margin-top: 8px;">🧬 心智设定 (AI 自我演化)</label>
-    <textarea v-model="cfg.dynamicTrait" @change="saveCfg" placeholder="初始性格标签。此处会被 AI 随时间修改。" style="min-height: 60px; border-color: #ff9500; background: #fffdfa;"></textarea>
+    <textarea v-model="cfg.dynamicTrait" @change="saveCfg" placeholder="初始性格标签。" style="min-height: 60px; border-color: #ff9500; background: #fffdfa;"></textarea>
 
     <label style="flex-direction: row; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
       <input type="checkbox" v-model="cfg.enableGrowth" @change="toggleGrowth" style="width: 16px; height: 16px;"><span style="font-size: 13px; color: #333; font-weight: 600;">启用养成模式</span>
     </label>
 
-    <div class="collapse-card">
-      <div @click="showAdvanced = !showAdvanced" class="collapse-header"><span>🎛️ 高级监控 (PAD / Trust)</span><span>{{ showAdvanced ? '▲' : '▼' }}</span></div>
-      <div v-show="showAdvanced" class="collapse-body">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span style="font-size:12px; color:#666;">性格基线</span>
-          <button @click="generateBaselinePAD" :disabled="isGeneratingBaseline || !cfg.system" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid #007aff; background:#fff; color:#007aff; cursor:pointer;">{{ isGeneratingBaseline ? '感知中...' : '✨ AI 自动提取' }}</button>
+    <!-- 高级状态面板 (全展开) -->
+    <div style="border: 1px solid #ddd; border-radius: 8px; margin-top: 12px; background: #fff; padding: 12px;">
+      <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px;">🎛️ 高级监控 (PAD / Trust)</div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:12px; color:#666;">性格基线</span>
+        <button @click="generateBaselinePAD" :disabled="isGeneratingBaseline || !cfg.system" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid #007aff; background:#fff; color:#007aff; cursor:pointer;">{{ isGeneratingBaseline ? '感知中...' : '✨ AI 自动提取' }}</button>
+      </div>
+      
+      <div style="display:flex; gap:8px; margin-bottom: 12px;">
+        <label style="flex:1; font-size:12px;">P <input type="number" v-model.number="cfg.baselinePAD.P" @change="saveCfg" min="-100" max="100" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px;"></label>
+        <label style="flex:1; font-size:12px;">A <input type="number" v-model.number="cfg.baselinePAD.A" @change="saveCfg" min="-100" max="100" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px;"></label>
+        <label style="flex:1; font-size:12px;">D <input type="number" v-model.number="cfg.baselinePAD.D" @change="saveCfg" min="-100" max="100" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:6px;"></label>
+      </div>
+
+      <div style="border-top: 1px dashed #ccc; padding-top: 10px;">
+        <div style="background:#fafafa; padding:10px; border-radius:8px; border:1px solid #e0e0e0; display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom: 8px;">
+          <span style="color: #ff3b30;">P: {{ Number(currentPAD?.P || 0).toFixed(1) }}</span>
+          <span style="color: #ff9500;">A: {{ Number(currentPAD?.A || 0).toFixed(1) }}</span>
+          <span style="color: #007aff;">D: {{ Number(currentPAD?.D || 0).toFixed(1) }}</span>
         </div>
-        <div style="display:flex; gap:8px; margin-bottom: 12px;">
-          <label style="flex:1; font-size:12px;">P <input type="number" v-model.number="cfg.baselinePAD.P" @change="saveCfg" min="-100" max="100"></label>
-          <label style="flex:1; font-size:12px;">A <input type="number" v-model.number="cfg.baselinePAD.A" @change="saveCfg" min="-100" max="100"></label>
-          <label style="flex:1; font-size:12px;">D <input type="number" v-model.number="cfg.baselinePAD.D" @change="saveCfg" min="-100" max="100"></label>
-        </div>
-        <div style="border-top: 1px dashed #ccc; padding-top: 10px;">
-          <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #e0e0e0; display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom: 8px;">
-            <span style="color: #ff3b30;">P: {{ Number(currentPAD?.P || 0).toFixed(1) }}</span>
-            <span style="color: #ff9500;">A: {{ Number(currentPAD?.A || 0).toFixed(1) }}</span>
-            <span style="color: #007aff;">D: {{ Number(currentPAD?.D || 0).toFixed(1) }}</span>
-          </div>
-          <div style="background:#fff; padding:10px; border-radius:8px; border:1px solid #ffb3ba; display:flex; justify-content:center; font-size:13px; font-weight:600; color: #ff3b30;">❤️ 信任度: {{ currentTrust }} / 100</div>
+        <div style="background:#fafafa; padding:10px; border-radius:8px; border:1px solid #ffb3ba; display:flex; justify-content:center; font-size:13px; font-weight:600; color: #ff3b30;">
+          ❤️ 信任度: {{ currentTrust }} / 100
         </div>
       </div>
     </div>
 
-    <div class="collapse-card">
-      <div @click="showMemoryBank = !showMemoryBank" class="collapse-header"><span>🧠 记忆库 (共 {{ (memoryBank || []).length }} 条)</span><span>{{ showMemoryBank ? '▲' : '▼' }}</span></div>
-      <div v-show="showMemoryBank" class="collapse-body" style="max-height: 300px; overflow-y: auto;">
+    <!-- 记忆库 (全展开) -->
+    <div style="border: 1px solid #ddd; border-radius: 8px; margin-top: 12px; background: #fff; padding: 12px;">
+      <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 12px;">🧠 记忆库 (共 {{ (memoryBank || []).length }} 条)</div>
+      
+      <div style="max-height: 250px; overflow-y: auto;">
         <div v-if="!(memoryBank || []).length" style="text-align: center; color: #999; font-size: 12px; padding: 10px;">一片空白，多聊几句吧。</div>
-        <div v-for="(mem, idx) in (memoryBank || [])" :key="mem?.id" style="background: #fff; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #007aff; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <div v-for="(mem, idx) in (memoryBank || [])" :key="mem?.id" style="background: #fafafa; padding: 8px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #007aff; border-top: 1px solid #eee; border-right: 1px solid #eee; border-bottom: 1px solid #eee;">
           <div style="font-size: 13px; color: #333; line-height: 1.4;">{{ mem?.content }}</div>
           <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: #888;">
-            <span>⭐ 重要度: {{ mem?.importance }}/10</span><span>🕒 留存: {{ Number(getMemoryRetention(mem) || 0).toFixed(1) }}%</span><span style="color: #ff3b30; cursor: pointer;" @click="deleteMemory(idx)">删除</span>
+            <span>⭐ 重要度: {{ mem?.importance }}/10</span>
+            <span>🕒 留存: {{ Number(getMemoryRetention(mem) || 0).toFixed(1) }}%</span>
+            <span style="color: #ff3b30; cursor: pointer; font-weight: bold;" @click="deleteMemory(idx)">删除</span>
           </div>
         </div>
       </div>
@@ -301,19 +284,12 @@ createApp({
     const dbDel = async (key) => { try { if (!window.idbKeyval) return; await idbKeyval.del(key); } catch (e) {} };
 
     const roleList = ref([]); const activeRoleId = ref(null); const showSidebar = ref(false); const isAppReady = ref(false);
-    
-    // 核心配置
-    const cfg = ref({ 
-      apiKey: '', name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', 
-      playerName: '', playerAddress: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } 
-    });
+    const cfg = ref({ apiKey: '', name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', playerName: '', playerAddress: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } });
     const messages = ref([]); const branches = ref({}); const diaryLogs = ref([]); const memoryBank = ref([]); 
     const currentPAD = ref({ P: 20, A: -20, D: -30 }); const currentTrust = ref(10);
     const input = ref(''); const loading = ref(false); const showSettings = ref(false); const listEl = ref(null);
     const editingIndex = ref(-1); const editInput = ref(''); const expandedReasoning = ref(-1); const expandedMemory = ref(-1);
-    const showAdvanced = ref(false); const showMemoryBank = ref(false); const showDiary = ref(false);
-    const isGeneratingDiary = ref(false); const isGeneratingBaseline = ref(false);
-    const isSummarizing = ref(false);
+    const showDiary = ref(false); const isGeneratingDiary = ref(false); const isGeneratingBaseline = ref(false); const isSummarizing = ref(false);
     const loadingText = ref('思考中...');
     
     let loadingTimer = null; let inactivityTimer = null; let secondMessageTimer = null; let padTickTimer = null; let extractor = null;
@@ -357,7 +333,6 @@ createApp({
       try {
         const loadedCfg = await dbGet(getKey('cfg'), null);
         cfg.value = loadedCfg || { apiKey: cfg.value.apiKey, name: '新角色', system: defaultSystemPrompt, dynamicTrait: '', playerName: '', playerAddress: '', enableGrowth: false, baselinePAD: { P: 20, A: -20, D: -30 } };
-        
         if (!cfg.value.baselinePAD) cfg.value.baselinePAD = { P: 20, A: -20, D: -30 };
         if (cfg.value.baselinePAD.P === undefined) cfg.value.baselinePAD.P = 20;
         if (cfg.value.baselinePAD.A === undefined) cfg.value.baselinePAD.A = -20;
@@ -370,13 +345,10 @@ createApp({
         const rawMsgs = await dbGet(getKey('messages'), []);
         messages.value = Array.isArray(rawMsgs) ? rawMsgs : [];
         messages.value.forEach(m => { if (!m.timestamp) m.timestamp = Date.now(); });
-
         const rawMem = await dbGet(getKey('memoryBank'), []);
         memoryBank.value = Array.isArray(rawMem) ? rawMem : [];
-        
         const rawBr = await dbGet(getKey('branches'), {});
         branches.value = (rawBr && typeof rawBr === 'object') ? rawBr : {};
-        
         const rawDiary = await dbGet(getKey('diaryLogs'), []);
         diaryLogs.value = Array.isArray(rawDiary) ? rawDiary : [];
 
@@ -439,13 +411,10 @@ createApp({
       return "暂无相关记忆。";
     }
 
-    // 提取记忆与事件总结
     async function extractMemories(force = false) {
       if (isSummarizing.value || loading.value || messages.value.length < 8) return; 
       isSummarizing.value = true;
-      
       const toExtract = messages.value.slice(-12);
-      
       const prompt = [
         { role: 'system', content: `你是记忆提取助手。请阅读对话，完成两件事：
 1. 【事件总览】(episode)：用15字以内概括这段对话主要发生了什么。
@@ -461,23 +430,14 @@ createApp({
       await streamRequest(prompt, async (jsonStr) => {
         try {
           const result = JSON.parse(jsonStr.match(/\{[\s\S]*\}/)[0]);
-          
           if (result.episode) {
             localStorage.setItem(getKey('lastEpisode'), result.episode);
             localStorage.setItem(getKey('lastEpisodeTime'), Date.now().toString());
           }
-
           if (result.memories && Array.isArray(result.memories)) {
             for (let m of result.memories) {
               const vector = await getEmbedding(m.content);
-              memoryBank.value.push({ 
-                id: Date.now().toString() + Math.random(), 
-                content: m.content, 
-                importance: m.importance || 5, 
-                vector: vector, 
-                createdAt: Date.now(), 
-                lastAccessed: Date.now() 
-              });
+              memoryBank.value.push({ id: Date.now().toString() + Math.random(), content: m.content, importance: m.importance || 5, vector: vector, createdAt: Date.now(), lastAccessed: Date.now() });
             }
             await saveMemoryBank(); cleanMemoryBank(); 
           }
@@ -485,26 +445,18 @@ createApp({
       }, () => { isSummarizing.value = false; }, true, 'deepseek-chat');
     }
 
-    // 提取玩家档案（名字与称呼）
     async function extractProfileByLLM(text) {
       const recentContext = messages.value.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
       const prompt = [
-        { role: 'system', content: `你是玩家档案提取器。请阅读对话，提取【玩家的名字】和【玩家要求角色对他的称呼】。
-⚠️注意：必须只提取玩家的信息。不要提取角色的名字。如果没有提取到，对应字段留空字符串。
-严格输出 JSON：{"player_name": "玩家的名字", "player_address": "称呼"}` },
+        { role: 'system', content: `提取玩家的名字和玩家要求角色对他的称呼。没有提取到留空字符串。严格 JSON：{"player_name": "", "player_address": ""}` },
         { role: 'user', content: recentContext }
       ];
-
       await streamRequest(prompt, async (jsonStr) => {
         try {
           const result = JSON.parse(jsonStr.match(/\{[\s\S]*\}/)[0]);
           let changed = false;
-          if (result.player_name && result.player_name.trim() !== '' && result.player_name !== cfg.value.playerName) {
-            cfg.value.playerName = result.player_name.trim(); changed = true;
-          }
-          if (result.player_address && result.player_address.trim() !== '' && result.player_address !== cfg.value.playerAddress) {
-            cfg.value.playerAddress = result.player_address.trim(); changed = true;
-          }
+          if (result.player_name && result.player_name.trim() !== '' && result.player_name !== cfg.value.playerName) { cfg.value.playerName = result.player_name.trim(); changed = true; }
+          if (result.player_address && result.player_address.trim() !== '' && result.player_address !== cfg.value.playerAddress) { cfg.value.playerAddress = result.player_address.trim(); changed = true; }
           if (changed) await saveCfg();
         } catch(e) {}
       }, null, true, 'deepseek-chat');
@@ -547,7 +499,6 @@ createApp({
       } catch (e) { onDelta('\n\n[出错] ' + e.message); } finally { onFinish && onFinish(); }
     }
 
-    // 极致缓存版：导演与演员流程
     async function performDirectorAndActor(userText, aiIdx, onComplete, contextType = 'chat') {
       const pad = getPAD(); 
       const trust = getTrust(); 
@@ -560,7 +511,6 @@ createApp({
       const lastMsg = messages.value[aiIdx - 1];
       const isNewSession = lastMsg && (Date.now() - lastMsg.timestamp > ONE_HOUR);
 
-      // 上一轮总结
       let lastSessionContext = "";
       if (isNewSession) {
         const lastEpisode = localStorage.getItem(getKey('lastEpisode')) || "";
@@ -573,7 +523,6 @@ createApp({
         }
       }
 
-      // 核心常识与玩家档案
       const coreMems = memoryBank.value.filter(m => m.importance >= 9);
       let coreStr = coreMems.length > 0 ? `\n【绝对常识（你天然知道，禁止复读）】\n` + coreMems.map(m => `- ${m.content}`).join('\n') : "";
       
@@ -584,7 +533,6 @@ createApp({
         if (cfg.value.playerAddress) playerProfileStr += `- 你必须叫他：${cfg.value.playerAddress}。\n`;
       }
 
-      // 1 小时内的历史对话
       let historyWindow = [];
       for (let i = aiIdx - 1; i >= 0; i--) {
         const msg = messages.value[i];
@@ -593,8 +541,6 @@ createApp({
       }
       if (historyWindow.length === 0 && aiIdx > 1) historyWindow = messages.value.slice(aiIdx - 3, aiIdx - 1).map(m => ({ role: m.role, content: m.content }));
 
-      // ==================== V3 导演阶段 ====================
-      
       const directorSystemBase = `你是角色「${charName}」的潜意识。你精通 OCC 认知评估心理学。\n【基础人设】\n${cfg.value.system}\n`;
       const directorSystemDynamic = `${playerProfileStr}${coreStr}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n【分析规则】：（）内为动作，括号外为语言。\n【PAD量表】：日常-5~+5；起伏-20~+20；核心-50~+50。\n【Trust变化】：关心+1~+3，敷衍-3~-10。\n输出严格 JSON: {"delta_PAD": {"P": 0, "A": 0, "D": 0},"delta_trust": 0,"occ_emotion": "4到8字情绪","occ_reason": "原因","director_script": "躯体化感受"}`;
 
@@ -622,24 +568,19 @@ createApp({
         } catch (e) {}
 
         // ==================== R1 演员阶段 ====================
-        
         const actorSystemBase = `【基础人设】\n${cfg.value.system}\n`;
         const actorSystemDynamic = `${playerProfileStr}${coreStr}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n【输出格式】：严格（动作）+ 台词。非语言放全角括号内。字数极少。绝不提及系统词汇。`;
 
         const currentHour = new Date().getHours();
         let timeVibe = "状态平稳";
-        if (currentHour >= 23 || currentHour < 5) {
-          timeVibe = "现在是深夜，你的身体非常疲惫，可能会打哈欠、揉眼睛，或者说话很慢。";
-        } else if (currentHour >= 5 && currentHour < 9) {
-          timeVibe = "现在是早晨，你可能刚醒，带着起床气或者还没完全清醒。";
-        } else if (currentHour >= 12 && currentHour < 14) {
-          timeVibe = "现在是中午，你可能会觉得肚子饿，或者想午休。";
-        }
+        if (currentHour >= 23 || currentHour < 5) timeVibe = "现在是深夜，你的身体非常疲惫，可能会打哈欠、揉眼睛，或者说话很慢。";
+        else if (currentHour >= 5 && currentHour < 9) timeVibe = "现在是早晨，你可能刚醒，带着起床气或者还没完全清醒。";
+        else if (currentHour >= 12 && currentHour < 14) timeVibe = "现在是中午，你可能会觉得肚子饿，或者想午休。";
 
         const actorPrompt = [
-          { role: 'system', content: actorSystemBase + actorSystemDynamic },
-          ...historyWindow,
-          { role: 'user', content: `【环境感知】现在是：${getCurrentTimeString()}。${timeVibe}\n【瞬间直觉】你感到【${result.occ_emotion}】，因为${result.occ_reason}。身体反应：${result.director_script}。\n请输出（动作）+ 台词：` }
+          { role: 'system', content: actorSystemBase + actorSystemDynamic }, 
+          ...historyWindow,                         
+          { role: 'user', content: `【环境感知】现在是：${getCurrentTimeString()}。${timeVibe}\n【瞬间直觉】你感到【${result.occ_emotion}】，因为${result.occ_reason}。身体反应：${result.director_script}。\n请输出（动作）+ 台词：` } 
         ];
 
         messages.value[aiIdx].reasoning = '';
@@ -651,7 +592,6 @@ createApp({
           localStorage.setItem(getKey('lastMessageTime'), Date.now());
           toBottom(); extractMemories(); startInactivityTimer(); onComplete && onComplete();
         }, false, 'deepseek-reasoner', (reasoningDelta) => { messages.value[aiIdx].reasoning += reasoningDelta; });
-        
       }, null, true, 'deepseek-chat');
     }
 
@@ -866,7 +806,7 @@ createApp({
     }
 
     return { 
-      cfg, messages, currentPAD, currentTrust, input, loading, loadingText, showSettings, listEl, send, saveCfg, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, exportData, importData, expandedReasoning, expandedMemory, generateBaselinePAD, isGeneratingBaseline, showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole, toggleGrowth, showTimeDivider, formatTime, showAdvanced, showMemoryBank, getMemoryRetention, deleteMemory, isAppReady, triggerWeather, formatMessage
+      cfg, messages, currentPAD, currentTrust, input, loading, loadingText, showSettings, listEl, send, saveCfg, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, exportData, importData, expandedReasoning, expandedMemory, generateBaselinePAD, isGeneratingBaseline, showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole, toggleGrowth, showTimeDivider, formatTime, getMemoryRetention, deleteMemory, isAppReady, triggerWeather, formatMessage
     };
   }
 }).mount('#app');
