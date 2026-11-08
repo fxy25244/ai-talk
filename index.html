@@ -783,7 +783,23 @@ createApp({
       const txt = input.value.trim(); if (!txt || loading.value) return;
       input.value = '';
 
-      if (/(叫|名字|称呼|喊我|大名)/.test(txt)) {
+      // ✨ 1. 前端正则暴力秒存（0延迟，100%准）
+      const matchAddress = txt.match(/(?:叫我|称呼我为|以后你叫我|以后喊我|喊我)([^\s，。！？!?吧]+)/);
+      if (matchAddress && matchAddress[1]) {
+        cfg.value.playerAddress = matchAddress[1];
+        await saveCfg();
+        console.log("✅ 前端强行记住称呼:", matchAddress[1]);
+      }
+      
+      const matchName = txt.match(/(?:我叫)([^\s，。！？!?吧]+)/);
+      if (matchName && matchName[1]) {
+        cfg.value.playerName = matchName[1];
+        await saveCfg();
+        console.log("✅ 前端强行记住名字:", matchName[1]);
+      }
+
+      // ✨ 2. 大模型兜底（处理复杂的长句，只要没被正则截获，就交给大模型）
+      if (/(叫|名字|称呼|喊我|大名)/.test(txt) && !matchAddress && !matchName) {
         extractProfileByLLM(txt); 
       }
 
