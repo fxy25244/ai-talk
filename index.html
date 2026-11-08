@@ -609,19 +609,19 @@ createApp({
         const actorSystemBase = `【基础人设】\n${cfg.value.system}\n`;
         const actorSystemDynamic = `${playerProfileStr}${coreStr}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n【输出格式】：严格（动作）+ 台词。非语言放全角括号内。字数极少。绝不提及系统词汇。`;
 
-        const actorPrompt = [
-          { role: 'system', content: actorSystemBase + actorSystemDynamic }, 
-          ...historyWindow,                         
-                  // ✨ 前端根据真实时间，计算出她的生理状态
         const currentHour = new Date().getHours();
         let timeVibe = "状态平稳";
-        if (currentHour >= 23 || currentHour < 5) timeVibe = "现在是深夜，你的身体非常疲惫，可能会打哈欠、揉眼睛，或者说话很慢。";
-        else if (currentHour >= 5 && currentHour < 9) timeVibe = "现在是早晨，你可能刚醒，带着起床气或者还没完全清醒。";
-        else if (currentHour >= 12 && currentHour < 14) timeVibe = "现在是中午，你可能会觉得肚子饿，或者想午休。";
+        if (currentHour >= 23 || currentHour < 5) {
+          timeVibe = "现在是深夜，你的身体非常疲惫，可能会打哈欠、揉眼睛，或者说话很慢。";
+        } else if (currentHour >= 5 && currentHour < 9) {
+          timeVibe = "现在是早晨，你可能刚醒，带着起床气或者还没完全清醒。";
+        } else if (currentHour >= 12 && currentHour < 14) {
+          timeVibe = "现在是中午，你可能会觉得肚子饿，或者想午休。";
+        }
 
         const actorPrompt = [
-          { role: 'system', content: actorSystemBase + actorSystemDynamic }, 
-          ...historyWindow,                         
+          { role: 'system', content: actorSystemBase + actorSystemDynamic },
+          ...historyWindow,
           { role: 'user', content: `【环境感知】现在是：${getCurrentTimeString()}。${timeVibe}\n【瞬间直觉】你感到【${result.occ_emotion}】，因为${result.occ_reason}。身体反应：${result.director_script}。\n请输出（动作）+ 台词：` }
         ];
 
