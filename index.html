@@ -265,10 +265,14 @@ footer button:disabled{opacity:.4}
       <div class="diary-list">
         <div v-if="!(diaryLogs || []).length" class="diary-empty">还没有写过日记～</div>
         <div v-for="log in (diaryLogs || [])" :key="log?.timestamp" class="diary-item"><div class="diary-date">{{ log?.date }}</div><div class="diary-text">{{ log?.content }}</div></div>
-        <!-- ✨ 新增：手动写日记按钮 -->
-        <div style="text-align: center; margin-top: 20px;" v-if="!(diaryLogs || []).length">
+        
+        <div style="text-align: center; margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
           <button @click="generateDiary" :disabled="isGeneratingDiary || loading" style="padding: 10px 20px; border-radius: 20px; border: none; background: #007aff; color: white; font-size: 14px; font-weight: 600;">
             {{ isGeneratingDiary ? '她正在提笔...' : '✍️ 催她写今天的日记' }}
+          </button>
+          
+          <button @click="forceEvolve" :disabled="isGeneratingDiary || loading" style="padding: 10px 20px; border-radius: 20px; border: none; background: #ff9500; color: white; font-size: 14px; font-weight: 600;">
+            {{ isGeneratingDiary ? '正在感悟...' : '🧬 强制心智演化' }}
           </button>
         </div>
       </div>
@@ -424,7 +428,7 @@ createApp({
       return "暂无相关记忆。";
     }
 
-    // 暴力提取记忆（自动+手动通用逻辑）
+    // 暴力提取记忆
     async function extractMemories(force = false) {
       if (isSummarizing.value || loading.value || messages.value.length < 2) return; 
       if (!force && messages.value.length < 8) return;
@@ -439,7 +443,6 @@ createApp({
 
       await streamRequest(prompt, async (jsonStr) => {
         try {
-          // ✨ 极度暴力的 JSON 清洗防弹衣
           const cleanStr = jsonStr.replace(/```json/gi, '').replace(/```/g, '').trim();
           const match = cleanStr.match(/\{[\s\S]*\}/);
           if (!match) throw new Error("没有找到JSON结构");
@@ -449,19 +452,35 @@ createApp({
             localStorage.setItem(getKey('lastEpisode'), result.episode);
             localStorage.setItem(getKey('lastEpisodeTime'), Date.now().toString());
           }
+          
+          let successCount = 0;
           if (result.memories && Array.isArray(result.memories)) {
             for (let m of result.memories) {
-              if (!m.content) continue;
-              const vector = await getEmbedding(m.content);
-              memoryBank.value.push({ id: Date.now().toString() + Math.random(), content: m.content, importance: Number(m.importance) || 5, vector: vector, createdAt: Date.now(), lastAccessed: Date.now() });
+              // ✨ 兼容各种字段名，绝不漏掉任何一条
+              const memoryContent = m.content || m.memory || m.text || m.event;
+              if (!memoryContent) continue; 
+              
+              const vector = await getEmbedding(memoryContent);
+              memoryBank.value.push({ 
+                id: Date.now().toString() + Math.random(), 
+                content: memoryContent, 
+                importance: Number(m.importance) || 5, 
+                vector: vector, 
+                createdAt: Date.now(), 
+                lastAccessed: Date.now() 
+              });
+              successCount++;
             }
-            await saveMemoryBank(); cleanMemoryBank(); 
-            if (force) alert(`✅ 提取成功！记住了 ${result.memories.length} 件事，去列表里看看！`);
-          } else if (force) {
-            alert("❌ 大模型觉得这些话没价值，什么都没提取。");
+            await saveMemoryBank(); 
+            cleanMemoryBank(); 
+            
+            if (force) {
+              if (successCount > 0) alert(`✅ 提取成功！记住了 ${successCount} 件事，去列表里看看！`);
+              else alert(`❌ 解析失败：大模型没按格式返回 content 字段。`);
+            }
           }
         } catch (e) { 
-          if (force) alert("❌ 提取失败！原因：" + e.message + "\n返回：" + jsonStr.slice(0, 50));
+          if (force) alert("❌ 提取失败！原因：" + e.message);
         }
       }, () => { isSummarizing.value = false; }, true, 'deepseek-chat');
     }
@@ -471,7 +490,6 @@ createApp({
       await extractMemories(true);
     }
 
-    // 前端强行记住名字
     async function extractProfileByLLM(text) {
       const recentContext = messages.value.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
       const prompt = [
@@ -529,7 +547,7 @@ createApp({
       } catch (e) { onDelta('\n\n[出错] ' + e.message); } finally { onFinish && onFinish(); }
     }
 
-    // 导演与演员流程
+    // 导演与演员流程 (修复了上下文幻觉)
     async function performDirectorAndActor(userText, aiIdx, onComplete, contextType = 'chat') {
       const pad = getPAD(); const trust = getTrust(); const charName = cfg.value.name || 'AI';
       
@@ -568,7 +586,16 @@ createApp({
         if (Date.now() - msg.timestamp > ONE_HOUR) break; 
         historyWindow.unshift({ role: msg.role, content: msg.content });
       }
-      if (historyWindow.length === 0 && aiIdx > 1) historyWindow = messages.value.slice(aiIdx - 3, aiIdx - 1).map(m => ({ role: m.role, content: m.content }));
+      
+      // ✨ 修复：主动问候/天气如果超过1小时，绝不要瞎捞旧记录
+      if (historyWindow.length === 0 && aiIdx > 1 && contextType === 'chat') {
+        historyWindow = messages.value.slice(aiIdx - 3, aiIdx - 1).map(m => ({ role: m.role, content: m.content }));
+      }
+
+      // ✨ 修复：防呆，去除末尾冲突的 user 消息
+      if (historyWindow.length > 0 && historyWindow[historyWindow.length - 1].role === 'user') {
+        historyWindow.pop();
+      }
 
       const directorSystemBase = `你是角色「${charName}」的潜意识。你精通 OCC 认知评估心理学。\n【基础人设】\n${cfg.value.system}\n`;
       const directorSystemDynamic = `${playerProfileStr}${coreStr}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n【分析规则】：（）内为动作，括号外为语言。\n【PAD量表】：日常-5~+5；起伏-20~+20；核心-50~+50。\n【Trust变化】：关心+1~+3，敷衍-3~-10。\n输出严格 JSON: {"delta_PAD": {"P": 0, "A": 0, "D": 0},"delta_trust": 0,"occ_emotion": "4到8字情绪","occ_reason": "原因","director_script": "躯体化感受"}`;
@@ -597,7 +624,6 @@ createApp({
           messages.value[aiIdx].occ_emotion = result.occ_emotion;
         } catch (e) {}
 
-        // R1 演员阶段
         const actorSystemBase = `【基础人设】\n${cfg.value.system}\n`;
         const actorSystemDynamic = `${playerProfileStr}${coreStr}\n【心智设定】\n${cfg.value.dynamicTrait || '无'}\n【输出格式】：严格（动作）+ 台词。非语言放全角括号内。字数极少。绝不提及系统词汇。`;
 
@@ -675,7 +701,7 @@ createApp({
         toBottom(); 
         if (cfg.value.apiKey) {
           checkAndTriggerGreeting(); 
-          autoSleepJournal(); // 切换角色时检查日记
+          autoSleepJournal(); 
         }
       });
     };
@@ -709,17 +735,19 @@ createApp({
       } catch(e){ alert("失败"); } finally { isGeneratingDiary.value = false; }
     }
 
-    // 夜间自动总结
-    async function autoSleepJournal() {
-      if (isGeneratingDiary.value || loading.value || !cfg.value.apiKey) return;
-      const today = new Date().toLocaleDateString(); if (localStorage.getItem(getKey('lastAutoJournalDate')) === today) return;
+    async function autoSleepJournal(force = false) {
+      if (!force) {
+        if (isGeneratingDiary.value || loading.value || !cfg.value.apiKey) return;
+        const today = new Date().toLocaleDateString(); 
+        if (localStorage.getItem(getKey('lastAutoJournalDate')) === today) return;
+      }
       
       const mems = memoryBank.value.slice(-5).map(m=>`- ${m.content}`).join('\n');
       const chat = messages.value.slice(-10).map(m=>`${m.role}: ${m.content}`).join('\n');
       if (!mems && !chat) return; 
       
       isGeneratingDiary.value = true;
-      const prompt = [{ role: 'system', content: `身份是「${cfg.value.name}」。写日记(100字)。JSON: {"diary":"..."}` }, { role: 'user', content: `【事】\n${mems}\n【话】\n${chat}` }];
+      const prompt = [{ role: 'system', content: `身份是「${cfg.value.name}」。写日记(100字)并演化心智。JSON: {"diary":"...", "new_trait": "..."}` }, { role: 'user', content: `【事】\n${mems}\n【话】\n${chat}` }];
       try {
         const res = await fetch('https://api.deepseek.com/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.value.apiKey }, body: JSON.stringify({ model: 'deepseek-chat', messages: prompt, response_format: { type: "json_object" } }) });
         if (res.ok) {
@@ -729,11 +757,20 @@ createApp({
           if (match) {
             const result = JSON.parse(match[0]);
             const date = new Date(); const ds = `${date.getFullYear()}年${date.getMonth()+1}月${date.getDate()}日`;
-            diaryLogs.value = diaryLogs.value.filter(l=>l.date!==ds); diaryLogs.value.unshift({date:ds,content:result.diary,timestamp:Date.now()});
-            await saveDiary(); localStorage.setItem(getKey('lastAutoJournalDate'), today);
+            if(result.diary) {
+              diaryLogs.value = diaryLogs.value.filter(l=>l.date!==ds); diaryLogs.value.unshift({date:ds,content:result.diary,timestamp:Date.now()});
+              await saveDiary(); 
+            }
+            if (result.new_trait) { cfg.value.dynamicTrait = result.new_trait; await saveCfg(); }
+            localStorage.setItem(getKey('lastAutoJournalDate'), new Date().toLocaleDateString());
           }
         }
       } catch(e){} finally { isGeneratingDiary.value = false; }
+    }
+
+    async function forceEvolve() {
+      await autoSleepJournal(true);
+      alert("✨ 强制演化完成，请去设置里查看最新心智！");
     }
 
     const clearInactivityTimer = () => { if (inactivityTimer) { clearTimeout(inactivityTimer); inactivityTimer = null; } };
@@ -848,7 +885,6 @@ createApp({
       const txt = input.value.trim(); if (!txt || loading.value) return;
       input.value = '';
 
-      // ✨ 前端正则暴力秒存名字/称呼
       const matchAddress = txt.match(/(?:叫我|称呼我为|以后你叫我|以后喊我|喊我)([^\s，。！？!?吧]+)/);
       if (matchAddress && matchAddress[1]) { cfg.value.playerAddress = matchAddress[1]; await saveCfg(); }
       
@@ -863,7 +899,7 @@ createApp({
       const ONE_HOUR = 60 * 60 * 1000;
       if (lastMsg && (Date.now() - lastMsg.timestamp > ONE_HOUR)) {
         loading.value = true; 
-        await extractMemories(true); // 跨会话强制总结
+        await extractMemories(true);
         loading.value = false;
       }
 
@@ -878,7 +914,7 @@ createApp({
     }
 
     return { 
-      cfg, messages, currentPAD, currentTrust, input, loading, loadingText, showSettings, listEl, send, saveCfg, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, exportData, importData, expandedReasoning, expandedMemory, generateBaselinePAD, isGeneratingBaseline, showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole, toggleGrowth, showTimeDivider, formatTime, getMemoryRetention, deleteMemory, isAppReady, triggerWeather, formatMessage, forceExtractMemory
+      cfg, messages, currentPAD, currentTrust, input, loading, loadingText, showSettings, listEl, send, saveCfg, clear, getAvatarChar, regenerate, editingIndex, editInput, startEdit, cancelEdit, saveEdit, branches, switchRoute, showDiary, diaryLogs, isGeneratingDiary, generateDiary, exportData, importData, expandedReasoning, expandedMemory, generateBaselinePAD, isGeneratingBaseline, showSidebar, roleList, activeRoleId, switchRole, addNewRole, deleteRole, toggleGrowth, showTimeDivider, formatTime, getMemoryRetention, deleteMemory, isAppReady, triggerWeather, formatMessage, forceExtractMemory, forceEvolve
     };
   }
 }).mount('#app');
