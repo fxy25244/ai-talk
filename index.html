@@ -53,7 +53,9 @@ header button{background:none;border:none;font-size:14px;color:#555;cursor:point
 .role-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn-add-role{margin:16px;padding:12px;background:#f0f8ff;color:#007aff;border:1px dashed #007aff;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;text-align:center}
 
-main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+main{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-anchor:none;overscroll-behavior:contain}
+.history-loader{text-align:center;font-size:12px;color:#999;padding:4px 0 10px;cursor:pointer;user-select:none}
+.jump-latest{position:absolute;right:16px;bottom:calc(86px + env(safe-area-inset-bottom));z-index:15;background:#fff;border:1px solid #e5e5e5;box-shadow:0 4px 14px rgba(0,0,0,.12);color:#007aff;font-size:12px;border-radius:18px;padding:8px 12px;cursor:pointer}
 .msg{display:flex;width:100%}
 .msg.user{justify-content:flex-end}
 .msg.assistant{justify-content:flex-start}
@@ -82,6 +84,10 @@ main{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:
 .action-btns{display:flex;gap:4px;margin-top:6px;align-items:center;flex-wrap:wrap}
 .action-btn{font-size:12px;color:#888;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px}
 .route-switcher{display:flex;align-items:center;gap:6px;background:#f0f8ff;border:1px solid #cce5ff;padding:2px 8px;border-radius:12px;font-size:12px;color:#007aff}
+.sources{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px;font-size:11px;color:#999;max-width:100%}
+.sources-label{flex-shrink:0}
+.sources a{color:#007aff;text-decoration:none;background:#f0f8ff;border:1px solid #dbeafe;border-radius:7px;padding:2px 6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sources a:hover{text-decoration:underline}
 
 footer{display:flex;flex-direction:column;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid #eee;background:#fff;z-index:10}
 .footer-main{display:flex;gap:8px;align-items:flex-end}
@@ -179,19 +185,21 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
         <label>DeepSeek API Key<input v-model="appSettings.apiKey" @change="saveAppSettings" type="password" placeholder="sk-..."></label>
         <label>模型<input v-model="appSettings.model" @change="saveAppSettings" placeholder="deepseek-flash"></label>
         <label>记忆 / 摘要模型<input v-model="appSettings.auxModel" @change="saveAppSettings" placeholder="deepseek-chat"></label>
-        <p class="hint">聊天和看图使用主模型；反思、记忆、摘要和印象使用更便宜的辅助模型。Key 只保存在本机，不会写入导出备份。</p>
+        <label class="check-row"><input type="checkbox" v-model="appSettings.webSearch" @change="saveAppSettings"> 允许联网搜索 / 阅读链接</label>
+        <p class="hint">聊天和看图使用主模型；反思、记忆、摘要和印象使用更便宜的辅助模型。联网由模型自行判断，搜索和读链接在 DeepSeek 服务端完成。Key 只保存在本机，不会写入导出备份。</p>
       </section>
 
       <section>
         <h4>角色</h4>
         <label>角色名<input v-model="roleName" @change="savePersona" placeholder="例：基米"></label>
         <div class="two-col">
-          <label>玩家名字<input v-model="profile.player.name" @change="savePersona" placeholder="如：李信"></label>
+          <label>玩家名字<input v-model="profile.player.name" @change="savePersona" placeholder="如：张三"></label>
           <label>对你的称呼<input v-model="profile.player.address" @change="savePersona" placeholder="如：主人 / 哥哥"></label>
         </div>
         <label>人格设定<textarea v-model="profile.persona.core" @change="savePersona" placeholder="性格、价值观、喜好、行为方式……"></textarea></label>
         <label>世界观<textarea v-model="profile.world" @change="savePersona" placeholder="角色所处的世界、时代、背景规则……" style="min-height:90px;"></textarea></label>
         <label>表达习惯<input v-model="profile.persona.voice" @change="savePersona" placeholder="短句、少用感叹号、偶尔停顿……"></label>
+        <label>说话样例（每行一句）<textarea v-model="examplesText" @change="savePersona" placeholder="嗯。&#10;随你，但我不太高兴。&#10;……你继续。" style="min-height:80px;"></textarea></label>
         <label>性格关键词<input v-model="traitsText" @change="savePersona" placeholder="安静、嘴硬、观察力强"></label>
         <div class="two-col">
           <label>喜欢<input v-model="likesText" @change="savePersona" placeholder="雨天、旧书"></label>
@@ -283,8 +291,12 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
     </div>
   </div>
 
-  <main ref="listEl">
+  <main ref="listEl" @scroll="onMainScroll">
+    <div v-if="visibleStartIndex > 0" class="history-loader" @click="loadOlder">
+      {{ isLoadingOlder ? '正在加载更早的消息…' : '向上滑动加载更早的消息' }}
+    </div>
     <template v-for="(m, i) in messages" :key="m.id">
+      <template v-if="i >= visibleStartIndex">
       <div v-if="showTimeDivider(i)" class="time-divider">{{ formatTime(m.timestamp) }}</div>
       <div :class="['msg', m.role]">
         <div v-if="m.role === 'assistant'" class="char-avatar">{{ getAvatarChar(activeRole?.name) }}</div>
@@ -302,6 +314,10 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
           <div v-if="loading && i === messages.length - 1 && !m.content" class="bubble" style="background:transparent;box-shadow:none;padding:0;">
             <span class="loading-text">{{ loadingText }}<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span></span>
           </div>
+          <div v-if="m.sources && m.sources.length" class="sources">
+            <span class="sources-label">来源</span>
+            <a v-for="src in m.sources" :key="src.url" :href="safeSourceUrl(src.url)" target="_blank" rel="noopener noreferrer">{{ src.title || src.url }}</a>
+          </div>
           <div v-if="editingIndex !== i && !loading" class="action-btns">
             <div v-if="branches?.[i] && branches[i].list?.length > 1" class="route-switcher"><button @click="switchRoute(i, -1)">&#9664;</button><span>路线 {{ branches[i].active + 1 }} / {{ branches[i].list?.length }}</span><button @click="switchRoute(i, 1)">&#9654;</button></div>
             <button v-if="m.role === 'user'" @click="startEdit(i)" class="action-btn">&#9998; 修改</button>
@@ -309,6 +325,7 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
           </div>
         </div>
       </div>
+      </template>
     </template>
   </main>
 
@@ -326,6 +343,8 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
       <button v-else class="send-btn" @click="send" :disabled="loading || !isAppReady || (!input.trim() && !pendingImage)">发送</button>
     </div>
   </footer>
+
+  <button v-if="!stickToBottom" class="jump-latest" @click="scrollToLatest(true)">↓ 回到最新</button>
 
   <div v-if="showDiary" class="diary-overlay" @click.self="showDiary = false">
     <div class="diary-panel">
@@ -424,7 +443,7 @@ createApp({
     const activeRoleId = ref(null);
     const activeRole = computed(() => roleList.value.find(r => r.id === activeRoleId.value) || null);
     const roleName = ref('');
-    const appSettings = ref({ apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', auxModel: 'deepseek-chat' });
+    const appSettings = ref({ apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', auxModel: 'deepseek-chat', webSearch: true });
 
     function emptyProfile(core) {
       return {
@@ -436,7 +455,8 @@ createApp({
           values: [],
           likes: [],
           dislikes: [],
-          boundaries: []
+          boundaries: [],
+          examples: []
         },
         player: { name: '', address: '' },
         states: [],
@@ -483,17 +503,23 @@ createApp({
     const isRebuilding = ref(false);
     const isCleaning = ref(false);
     const isSummarizingSegment = ref(false);
+    const visibleStartIndex = ref(0);
+    const stickToBottom = ref(true);
+    const isLoadingOlder = ref(false);
+    const HISTORY_PAGE = 30;
 
     let loadingTimer = null;
     let activeAbort = null;
     let extractor = null;
     let embedLoadPromise = null;
     let scrollScheduled = false;
+    let adjustingScroll = false;
 
     const traitsText = computed({ get: () => profile.value.persona.traits.join('、'), set: v => { profile.value.persona.traits = splitList(v); } });
     const valuesText = computed({ get: () => profile.value.persona.values.join('、'), set: v => { profile.value.persona.values = splitList(v); } });
     const likesText = computed({ get: () => profile.value.persona.likes.join('、'), set: v => { profile.value.persona.likes = splitList(v); } });
     const dislikesText = computed({ get: () => profile.value.persona.dislikes.join('、'), set: v => { profile.value.persona.dislikes = splitList(v); } });
+    const examplesText = computed({ get: () => profile.value.persona.examples.join('\n'), set: v => { profile.value.persona.examples = String(v || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 6); } });
     const activeSelfNotes = computed(() => profile.value.selfModel.filter(s => s.status === 'active'));
     const pendingImpressionCount = computed(() => memories.value.filter(m => m.impressionWorthy && !m.impressionApplied).length);
 
@@ -518,7 +544,8 @@ createApp({
           values: Array.isArray(p.values) ? p.values : [],
           likes: Array.isArray(p.likes) ? p.likes : [],
           dislikes: Array.isArray(p.dislikes) ? p.dislikes : [],
-          boundaries: Array.isArray(p.boundaries) ? p.boundaries : []
+          boundaries: Array.isArray(p.boundaries) ? p.boundaries : [],
+          examples: Array.isArray(p.examples) ? p.examples.filter(x => typeof x === 'string' && x.trim()).slice(0, 6) : []
         },
         player: {
           name: raw.player?.name || oldCfg?.playerName || '',
@@ -563,6 +590,7 @@ createApp({
           timestamp: m.timestamp || Date.now(),
           origin: m.origin || 'chat',
           reality: m.reality || 'actual',
+          sources: Array.isArray(m.sources) ? m.sources.filter(s => s && s.url).map(s => ({ url: s.url, title: s.title || s.url })) : [],
           attachments: Array.isArray(m.attachments) ? m.attachments.filter(a => a && a.id).map(a => ({ id: a.id, type: 'image', mime: a.mime || 'image/jpeg', width: a.width || 0, height: a.height || 0 })) : []
         });
       }
@@ -696,6 +724,7 @@ createApp({
       const messagesSaved = await saveMessages();
       const journalSaved = existingJournal ? true : await dbSet(getKey('journal'), journal.value);
       await loadAttachmentUrls();
+      resetHistoryWindow();
 
       // 迁移成功后清理旧版数值心理机制、旧记忆键，避免残留。
       if ((oldCfg || legacyMem || legacyJournal) && profileSaved && memoriesSaved && messagesSaved && journalSaved) {
@@ -852,17 +881,64 @@ createApp({
     function selfKindLabel(v) {
       return ({ preference: '偏好', opinion: '观点', habit: '习惯', self: '自我认识' })[v] || '自我认识';
     }
-    function toBottom() {
-      nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight; });
+    function isNearBottom(el) {
+      return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     }
+    function scrollToLatest(force = false) {
+      if (!force && !stickToBottom.value) return;
+      nextTick(() => requestAnimationFrame(() => {
+        const el = listEl.value;
+        if (!el) return;
+        adjustingScroll = true;
+        el.scrollTop = el.scrollHeight;
+        stickToBottom.value = true;
+        requestAnimationFrame(() => { adjustingScroll = false; });
+      }));
+    }
+    function toBottom() { scrollToLatest(true); }
     function scheduleScroll() {
-      if (scrollScheduled) return;
+      if (!stickToBottom.value || scrollScheduled) return;
       scrollScheduled = true;
       requestAnimationFrame(() => {
         scrollScheduled = false;
         const el = listEl.value;
-        if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+        if (!el) return;
+        if (isNearBottom(el)) el.scrollTop = el.scrollHeight;
       });
+    }
+    function resetHistoryWindow() {
+      visibleStartIndex.value = Math.max(0, messages.value.length - HISTORY_PAGE);
+      stickToBottom.value = true;
+    }
+    function onMainScroll() {
+      const el = listEl.value;
+      if (!el || adjustingScroll) return;
+      stickToBottom.value = isNearBottom(el);
+      if (el.scrollTop < 80 && visibleStartIndex.value > 0 && !isLoadingOlder.value) loadOlder();
+    }
+    async function loadOlder() {
+      if (isLoadingOlder.value || visibleStartIndex.value <= 0) return;
+      const el = listEl.value;
+      if (!el) return;
+      isLoadingOlder.value = true;
+      stickToBottom.value = false;
+      const prevHeight = el.scrollHeight;
+      const prevTop = el.scrollTop;
+      visibleStartIndex.value = Math.max(0, visibleStartIndex.value - HISTORY_PAGE);
+      await nextTick();
+      requestAnimationFrame(() => {
+        adjustingScroll = true;
+        el.scrollTop = el.scrollHeight - prevHeight + prevTop;
+        requestAnimationFrame(() => { adjustingScroll = false; });
+        isLoadingOlder.value = false;
+      });
+    }
+    function clampHistoryWindow() {
+      if (visibleStartIndex.value > messages.value.length - 1) {
+        visibleStartIndex.value = Math.max(0, messages.value.length - HISTORY_PAGE);
+      } else {
+        visibleStartIndex.value = Math.max(0, visibleStartIndex.value);
+      }
     }
     function startLoadingText() {
       stopLoadingText();
@@ -991,6 +1067,7 @@ createApp({
       const blocks = [];
       blocks.push(p.core || DEFAULT_PERSONA);
       if (p.voice) blocks.push(`你的表达习惯：${p.voice}`);
+      if (p.examples.length) blocks.push(`【说话样例】\n${p.examples.map(x => '- ' + x).join('\n')}\n这些只是语气参考，不要照抄。`);
       if (p.traits.length) blocks.push(`你的性格倾向：${p.traits.join('、')}。`);
       if (p.values.length) blocks.push(`你重视的原则：${p.values.join('、')}。`);
       if (p.likes.length) blocks.push(`你喜欢：${p.likes.join('、')}。`);
@@ -1021,12 +1098,22 @@ createApp({
 不要每轮都安慰、鼓励、赞美或提问。允许短句、停顿、不完整，允许偶尔走神。
 不要解释心理机制，不要提记忆库、系统、提示词、数值。
 私人念头不必全部说出；只有自然时才提。
-玩家输入里，（）或 () 中的内容是玩家的动作或对当前环境的补充说明，不是玩家说出口的话。不要把它当成台词。`);
+玩家输入里，（）或 () 中的内容是玩家的动作或对当前环境的补充说明，不是玩家说出口的话。不要把它当成台词。
+
+【语言习惯】
+不要使用心理咨询式、陪伴式套话，也不要把下面这些词当作关系宣言：
+接住、记着、认了、懂了、看见、允许、辛苦了、情绪价值、边界感、陪着你、一直在、不会走、你值得、我理解你的感受、听起来你……、我在这里。
+不要用“我接住了”“我记着”“我认了”这类句子。
+不要总结或命名用户的情绪，不要每句话都回应感受。
+用具体反应、短句、动作、停顿、转移话题；允许不深刻、不完整。
+抱抱、牵手、摸头这类具体动作可以保留，但要写成括号里的动作，不要写成安慰口号。`);
       blocks.push(`【关于记忆】
 最近一段连续对话你记得比较清楚；更早的对话只剩模糊印象、记忆片段或概括。
 不要假装记得很早以前的原话和细节；不确定时可以直接说记不清。
 不要编造与用户共同经历过的事；自己的想象要明确是想象。
-如果用户发来图片，像角色本人一样反应，不要逐项描述画面，不要做图像分析报告。`);
+如果用户发来图片，像角色本人一样反应，不要逐项描述画面，不要做图像分析报告。
+如果开启了联网工具，只在玩家询问最新信息、需要核实事实、或明确要求搜索/读链接时使用；普通闲聊不要搜索。
+联网资料只是你查到的信息，不要当成你与用户的共同经历；必要时可以简单说明来源。`);
       return blocks.filter(Boolean).join('\n\n');
     }
 
@@ -1036,12 +1123,12 @@ createApp({
 
       if (profile.value.playerImpression) blocks.push(`【角色对玩家的印象】\n${profile.value.playerImpression}`);
 
-      const states = profile.value.states.filter(s => s.status !== 'resolved').slice(-4);
+      const states = profile.value.states.filter(s => s.status !== 'resolved').slice(-2);
       if (states.length) blocks.push(`【你最近还在意的事】\n${states.map(s => '- ' + s.text).join('\n')}`);
 
-      const growth = profile.value.growth.filter(g => g.status === 'active').slice(-3);
+      const growth = profile.value.growth.filter(g => g.status === 'active').slice(-2);
       if (growth.length) blocks.push(`【你最近的变化】\n${growth.map(g => '- ' + g.text).join('\n')}`);
-      const selfNotes = profile.value.selfModel.filter(s => s.status === 'active').slice(-6);
+      const selfNotes = profile.value.selfModel.filter(s => s.status === 'active').slice(-3);
       if (selfNotes.length) blocks.push(`【你对自己的认识】\n${selfNotes.map(s => '- ' + s.text).join('\n')}`);
 
       const thought = profile.value.thoughts.filter(t => t.status === 'open').slice(-1)[0];
@@ -1249,12 +1336,38 @@ createApp({
       if (res.status === 401) return 'API Key 无效或已过期';
       if (res.status === 402) return '账户余额不足';
       if (res.status === 429) return '请求太频繁，稍后再试';
-      if (res.status === 400) return '请求被拒绝，可能是图片格式或大小不支持';
+      if (res.status === 400) return '请求被拒绝，可能是图片格式、大小或联网工具不支持';
       if (res.status >= 500) return '服务端暂时不可用';
       return text || `请求失败（${res.status}）`;
     }
 
-    async function streamChat(apiMessages, onDelta, maxTokens = 400) {
+    function safeSourceUrl(url) {
+      try {
+        const u = new URL(String(url || ''));
+        return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '#';
+      } catch (e) { return '#'; }
+    }
+
+    function collectSources(serverToolCalls, annotations) {
+      const map = new Map();
+      const add = (url, title) => {
+        if (!/^https?:\/\//i.test(String(url || ''))) return;
+        if (!map.has(url)) map.set(url, { url, title: title || url });
+      };
+      for (const step of (Array.isArray(serverToolCalls) ? serverToolCalls : [])) {
+        for (const call of (Array.isArray(step.calls) ? step.calls : [])) {
+          for (const src of (Array.isArray(call.sources) ? call.sources : [])) add(src.url, src.title || src.site_name);
+          if (call.page && call.page.url) add(call.page.url, call.page.title);
+        }
+      }
+      for (const a of (Array.isArray(annotations) ? annotations : [])) {
+        const c = a.url_citation || a;
+        add(c.url, c.title);
+      }
+      return [...map.values()];
+    }
+
+    async function streamChat(apiMessages, onDelta, maxTokens = 400, onMeta = null) {
       const apiKey = (appSettings.value.apiKey || '').trim();
       if (!apiKey) throw new Error('请先在设置里填写 API Key');
       const baseUrl = (appSettings.value.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
@@ -1262,16 +1375,20 @@ createApp({
       activeAbort = controller;
       const timeout = setTimeout(() => controller.abort(), 120000);
       try {
+        const body = {
+          model: appSettings.value.model || 'deepseek-flash',
+          messages: apiMessages,
+          stream: true,
+          temperature: 0.95,
+          max_tokens: maxTokens
+        };
+        if (appSettings.value.webSearch) {
+          body.tools = [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }];
+        }
         const res = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-          body: JSON.stringify({
-            model: appSettings.value.model || 'deepseek-flash',
-            messages: apiMessages,
-            stream: true,
-            temperature: 0.95,
-            max_tokens: maxTokens
-          }),
+          body: JSON.stringify(body),
           signal: controller.signal
         });
         if (!res.ok) throw new Error(await readApiError(res));
@@ -1279,6 +1396,13 @@ createApp({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
+        const sourceMap = new Map();
+        const emitSources = (calls, annotations) => {
+          for (const src of collectSources(calls, annotations)) {
+            if (!sourceMap.has(src.url)) sourceMap.set(src.url, src);
+          }
+          if (sourceMap.size && onMeta) onMeta({ sources: [...sourceMap.values()] });
+        };
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -1292,8 +1416,13 @@ createApp({
             if (!d || d === '[DONE]') continue;
             try {
               const j = JSON.parse(d);
-              const delta = j.choices?.[0]?.delta?.content;
-              if (delta) onDelta(delta);
+              const choice = j.choices?.[0];
+              const delta = choice?.delta;
+              if (choice?.server_tool_event?.type === 'call_started') loadingText.value = '正在查资料…';
+              if (delta?.content) onDelta(delta.content);
+              const calls = delta?.server_tool_calls || choice?.message?.server_tool_calls;
+              const annotations = delta?.annotations || choice?.message?.annotations;
+              if (calls || annotations) emitSources(calls, annotations);
             } catch (e) {}
           }
         }
@@ -1381,13 +1510,16 @@ createApp({
       const user = messages.value[aIdx - 1];
       startLoadingText();
       try {
+        assistant.sources = assistant.sources || [];
         const relevant = user?.content ? await searchMemories(user.content) : [];
         const api = await buildApiMessages(aIdx, relevant);
         startLoadingText();
         await streamChat(api, (delta) => {
           assistant.content += delta;
           scheduleScroll();
-        }, 400);
+        }, 400, (meta) => {
+          if (meta?.sources?.length) assistant.sources = meta.sources;
+        });
         if (!assistant.content.trim()) assistant.content = '（她沉默了一会儿。）';
       } catch (e) {
         if (e?.name === 'AbortError') {
@@ -1401,7 +1533,7 @@ createApp({
         loading.value = false;
         assistant.timestamp = Date.now();
         await saveMessages();
-        toBottom();
+        scrollToLatest(false);
         if (appSettings.value.apiKey) setTimeout(() => { maybeReflect(false); }, 1200);
       }
     }
@@ -1426,11 +1558,11 @@ createApp({
 
       const userMsg = {
         id: uid('msg'), role: 'user', content: text, timestamp: Date.now(),
-        origin: 'chat', reality: 'actual', attachments: attachment ? [attachment] : []
+        origin: 'chat', reality: 'actual', sources: [], attachments: attachment ? [attachment] : []
       };
       messages.value.push(userMsg);
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
       loading.value = true;
       await saveMessages();
       toBottom();
@@ -1489,7 +1621,7 @@ createApp({
   "player_impression": "只有达到更新条件时才填写；结合旧印象和 5 条待用记忆，否则留空"
 }`;
         const prompt = [
-          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\nself_updates 最多 1 条：只能写角色对自己的新认识，例如新的偏好、观点、习惯；至少两条证据；不能修改核心人格、价值观、边界，也不能删除或改写安全规则。没有充分证据就留空。\nsession_summary 用一两句话做模糊概括，保留情绪和关系变化，不要逐字复述原话。\nimpressionWorthy 每轮最多标记 1 条，且只能用于 relationship + shared + actual 的记忆；只有确实足以改变角色对玩家整体印象的事才标 true，普通日常、寒暄、普通夸奖标 false。\nplayer_impression 只有在满足【本轮印象条件】时才填写；更新时只参考旧印象和指定的 5 条待用记忆，不要额外加入其他记忆；否则填空字符串。\n记忆要短、具体、方便以后检索。\n${schema}` },
+          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n如果对话里包含联网搜索或阅读链接得到的信息，不要把它写成你和用户的共同经历；只能作为你查到的信息，最多记为 self。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数，也不要用“接住/被看见/情绪价值/边界感”这类套话。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\nself_updates 最多 1 条：只能写角色对自己的新认识，例如新的偏好、观点、习惯；至少两条证据；不能修改核心人格、价值观、边界，也不能删除或改写安全规则。没有充分证据就留空。\nsession_summary 用一两句话做模糊概括，保留情绪和关系变化，不要逐字复述原话。\nimpressionWorthy 每轮最多标记 1 条，且只能用于 relationship + shared + actual 的记忆；只有确实足以改变角色对玩家整体印象的事才标 true，普通日常、寒暄、普通夸奖标 false。\nplayer_impression 只有在满足【本轮印象条件】时才填写；更新时只参考旧印象和指定的 5 条待用记忆，不要额外加入其他记忆；否则填空字符串。\n记忆要短、具体、方便以后检索。\n${schema}` },
           { role: 'user', content: `【人格摘要】\n${(profile.value.persona.core || '').slice(0, 1000)}\n\n【旧的对玩家的印象】\n${profile.value.playerImpression || '（还没有明确印象）'}\n\n【待用印象记忆】共 ${pendingImpression.length} 条：\n${pendingText}\n\n【本轮印象条件】\n${impressionCondition}\n\n【已有内在状态】\n${JSON.stringify(existingStates.map(s => ({ id: s.id, text: s.text, status: s.status })), null, 2)}\n\n【已有自我认识】\n${JSON.stringify(profile.value.selfModel.filter(s => s.status === 'active').map(s => ({ id: s.id, kind: s.kind, text: s.text })), null, 2)}\n\n【已有记忆】\n${existingMemories.map(m => `- ${m.content}`).join('\n') || '（无）'}\n\n【最近对话】\n${transcript}\n\n请整理。` }
         ];
         const raw = await completeJSON(prompt, 1100);
@@ -1871,6 +2003,8 @@ createApp({
       await deleteAttachmentsForMessages(messages.value);
       messages.value = [];
       branches.value = {};
+      visibleStartIndex.value = 0;
+      stickToBottom.value = true;
       profile.value.sessionSummary = '';
       profile.value.sessionSummaryAt = 0;
       profile.value.sessionSummaryEndId = '';
@@ -1922,10 +2056,11 @@ createApp({
       target.content = txt;
       target.timestamp = Date.now();
       messages.value = messages.value.slice(0, index + 1);
+      clampHistoryWindow();
       editingIndex.value = -1;
       editInput.value = '';
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
       loading.value = true;
       await saveMessages();
       toBottom();
@@ -1942,10 +2077,11 @@ createApp({
       const last = messages.value[messages.value.length - 1];
       if (last.role !== 'assistant') return;
       messages.value.pop();
+      clampHistoryWindow();
       loading.value = true;
       await saveMessages();
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
       await saveMessages();
       await replyTo(aIdx);
     }
@@ -1959,6 +2095,8 @@ createApp({
       if (na >= br.list.length) na = 0;
       br.active = na;
       messages.value = normalizeMessages(JSON.parse(JSON.stringify(br.list[na])));
+      visibleStartIndex.value = Math.max(0, messages.value.length - HISTORY_PAGE);
+      stickToBottom.value = true;
       await saveMessages();
       await saveBranches();
       revokeAllAttachmentUrls();
@@ -2063,17 +2201,18 @@ createApp({
     return {
       appSettings, roleList, activeRoleId, activeRole, roleName, profile, messages, memories, journal, branches,
       showSidebar, showSettings, showDiary, isAppReady, loading, loadingText, input, pendingImage, fileInput, importFile, listEl,
+      visibleStartIndex, stickToBottom, isLoadingOlder, onMainScroll, loadOlder, scrollToLatest,
       editingIndex, editInput, isGeneratingDiary, isReflecting, isRebuilding, isCleaning, toast, needsRebuildCount,
       activeSelfNotes,
       pendingImpressionCount,
-      traitsText, valuesText, likesText, dislikesText,
+      traitsText, valuesText, likesText, dislikesText, examplesText,
       send, stopGeneration, onEnter, onImageSelected, clearPendingImage, attachmentUrl, openImage,
       startEdit, cancelEdit, saveEdit, regenerate, switchRoute,
       switchRole, addNewRole, deleteRole, openSettings, closeSettings, saveAppSettings, savePersona,
       exportData, importData, clearChat, clearMemories, deleteMemory, deleteState, deleteGrowth,
       cleanupMemories, restoreMemory, revertSelfNote,
       forceReflect, rebuildVectors, generateDiary, deleteJournal,
-      getAvatarChar, showTimeDivider, formatTime, parseMessage, kindLabel, importanceLabel, statusLabel, selfKindLabel
+      getAvatarChar, showTimeDivider, formatTime, parseMessage, kindLabel, importanceLabel, statusLabel, selfKindLabel, safeSourceUrl
     };
   }
 }).mount('#app');
