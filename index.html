@@ -178,7 +178,8 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
         <h4>API</h4>
         <label>DeepSeek API Key<input v-model="appSettings.apiKey" @change="saveAppSettings" type="password" placeholder="sk-..."></label>
         <label>模型<input v-model="appSettings.model" @change="saveAppSettings" placeholder="deepseek-flash"></label>
-        <p class="hint">默认 deepseek-flash，支持图片输入。Key 只保存在本机，不会写入导出备份。</p>
+        <label>记忆 / 摘要模型<input v-model="appSettings.auxModel" @change="saveAppSettings" placeholder="deepseek-chat"></label>
+        <p class="hint">聊天和看图使用主模型；反思、记忆、摘要和印象使用更便宜的辅助模型。Key 只保存在本机，不会写入导出备份。</p>
       </section>
 
       <section>
@@ -189,6 +190,7 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
           <label>对你的称呼<input v-model="profile.player.address" @change="savePersona" placeholder="如：主人 / 哥哥"></label>
         </div>
         <label>人格设定<textarea v-model="profile.persona.core" @change="savePersona" placeholder="性格、价值观、喜好、行为方式……"></textarea></label>
+        <label>世界观<textarea v-model="profile.world" @change="savePersona" placeholder="角色所处的世界、时代、背景规则……" style="min-height:90px;"></textarea></label>
         <label>表达习惯<input v-model="profile.persona.voice" @change="savePersona" placeholder="短句、少用感叹号、偶尔停顿……"></label>
         <label>性格关键词<input v-model="traitsText" @change="savePersona" placeholder="安静、嘴硬、观察力强"></label>
         <div class="two-col">
@@ -228,6 +230,17 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
           <div class="item-content">{{ st.text }}</div>
           <div class="item-meta">{{ st.status === 'active' ? '仍在影响她' : st.status === 'fading' ? '正在淡化' : '已经放下' }}</div>
           <button class="link-danger" @click="deleteState(st.id)">删除</button>
+        </div>
+      </section>
+
+      <section>
+        <h4>她对你的印象</h4>
+        <p class="hint">由反思标记的重要关系记忆触发；存够 5 条后，结合旧印象更新。你也可以手动修正。</p>
+        <p class="hint">待用印象记忆：{{ Math.min(pendingImpressionCount, 5) }} / 5</p>
+        <textarea v-model="profile.playerImpression" @change="saveProfile" placeholder="她目前如何看待你……" style="min-height:90px;"></textarea>
+        <div v-if="profile.sessionSummary" class="state-item">
+          <div class="item-meta">上一段对话的模糊摘要</div>
+          <div class="item-content">{{ profile.sessionSummary }}</div>
         </div>
       </section>
 
@@ -411,7 +424,7 @@ createApp({
     const activeRoleId = ref(null);
     const activeRole = computed(() => roleList.value.find(r => r.id === activeRoleId.value) || null);
     const roleName = ref('');
-    const appSettings = ref({ apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' });
+    const appSettings = ref({ apiKey: '', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', auxModel: 'deepseek-chat' });
 
     function emptyProfile(core) {
       return {
@@ -431,6 +444,16 @@ createApp({
         growth: [],
         selfModel: [],
         selfEdits: [],
+        world: '',
+        playerImpression: '',
+        playerImpressionAt: 0,
+        playerImpressionEvidenceIds: [],
+        sessionSummary: '',
+        sessionSummaryAt: 0,
+        sessionSummaryEndId: '',
+        sessionImpression: '',
+        activeSegmentSummary: '',
+        activeSegmentSummaryEndId: '',
         meta: { createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null, allowSelfEdit: true }
       };
     }
@@ -459,6 +482,7 @@ createApp({
     const isReflecting = ref(false);
     const isRebuilding = ref(false);
     const isCleaning = ref(false);
+    const isSummarizingSegment = ref(false);
 
     let loadingTimer = null;
     let activeAbort = null;
@@ -471,6 +495,7 @@ createApp({
     const likesText = computed({ get: () => profile.value.persona.likes.join('、'), set: v => { profile.value.persona.likes = splitList(v); } });
     const dislikesText = computed({ get: () => profile.value.persona.dislikes.join('、'), set: v => { profile.value.persona.dislikes = splitList(v); } });
     const activeSelfNotes = computed(() => profile.value.selfModel.filter(s => s.status === 'active'));
+    const pendingImpressionCount = computed(() => memories.value.filter(m => m.impressionWorthy && !m.impressionApplied).length);
 
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
@@ -512,6 +537,16 @@ createApp({
           updatedAt: x.updatedAt || x.createdAt || Date.now()
         })) : [],
         selfEdits: Array.isArray(raw.selfEdits) ? raw.selfEdits : [],
+        world: typeof raw.world === 'string' ? raw.world : '',
+        playerImpression: typeof raw.playerImpression === 'string' ? raw.playerImpression : '',
+        playerImpressionAt: raw.playerImpressionAt || 0,
+        playerImpressionEvidenceIds: Array.isArray(raw.playerImpressionEvidenceIds) ? raw.playerImpressionEvidenceIds : [],
+        sessionSummary: typeof raw.sessionSummary === 'string' ? raw.sessionSummary : '',
+        sessionSummaryAt: raw.sessionSummaryAt || 0,
+        sessionSummaryEndId: raw.sessionSummaryEndId || '',
+        sessionImpression: typeof raw.sessionImpression === 'string' ? raw.sessionImpression : '',
+        activeSegmentSummary: typeof raw.activeSegmentSummary === 'string' ? raw.activeSegmentSummary : '',
+        activeSegmentSummaryEndId: raw.activeSegmentSummaryEndId || '',
         meta: Object.assign({ createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null, allowSelfEdit: true }, raw.meta || {})
       };
     }
@@ -552,6 +587,9 @@ createApp({
           scope: m.scope === 'self' ? 'self' : 'shared',
           reality: ['actual', 'imagined', 'inferred'].includes(m.reality) ? m.reality : 'actual',
           importance,
+          impressionWorthy: !!m.impressionWorthy,
+          impressionApplied: !!m.impressionApplied,
+          impressionAppliedAt: m.impressionAppliedAt || 0,
           vector,
           embeddingModel: m.embeddingModel || (vector && vector.length === 384 ? 'Xenova/all-MiniLM-L6-v2' : null),
           createdAt: m.createdAt || Date.now(),
@@ -576,6 +614,7 @@ createApp({
     async function saveAppSettings() {
       appSettings.value.baseUrl = 'https://api.deepseek.com';
       if (!appSettings.value.model || !appSettings.value.model.trim()) appSettings.value.model = 'deepseek-flash';
+      if (!appSettings.value.auxModel || !appSettings.value.auxModel.trim()) appSettings.value.auxModel = 'deepseek-chat';
       await dbSet('app_settings', appSettings.value);
     }
     async function saveProfile() {
@@ -604,6 +643,9 @@ createApp({
         appSettings.value.baseUrl = 'https://api.deepseek.com';
         if (!appSettings.value.model || /deepseek-(chat|reasoner)/.test(appSettings.value.model)) {
           appSettings.value.model = 'deepseek-flash';
+        }
+        if (!appSettings.value.auxModel || /reasoner/.test(appSettings.value.auxModel)) {
+          appSettings.value.auxModel = 'deepseek-chat';
         }
       }
 
@@ -939,7 +981,12 @@ createApp({
       return top;
     }
 
-    function buildSystemPrompt(relevantMemories) {
+    function getTimeZoneName() {
+      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '本地时间'; }
+      catch (e) { return '本地时间'; }
+    }
+
+    function buildStableSystem(options = {}) {
       const p = profile.value.persona;
       const blocks = [];
       blocks.push(p.core || DEFAULT_PERSONA);
@@ -951,32 +998,22 @@ createApp({
       if (p.boundaries.length) blocks.push(`你的边界：${p.boundaries.join('、')}。`);
       if (profile.value.player.address) blocks.push(`你称呼用户为「${profile.value.player.address}」。`);
       else if (profile.value.player.name) blocks.push(`用户叫「${profile.value.player.name}」。`);
+      if (profile.value.world) blocks.push(`【世界观】\n${profile.value.world}`);
 
-      const states = profile.value.states.filter(s => s.status !== 'resolved').slice(-4);
-      if (states.length) blocks.push(`【你最近还在意的事】\n${states.map(s => '- ' + s.text).join('\n')}`);
-
-      const growth = profile.value.growth.filter(g => g.status === 'active').slice(-3);
-      if (growth.length) blocks.push(`【你最近的变化】\n${growth.map(g => '- ' + g.text).join('\n')}`);
-
-      const selfNotes = profile.value.selfModel.filter(s => s.status === 'active').slice(-6);
-      if (selfNotes.length) blocks.push(`【你对自己的认识】\n${selfNotes.map(s => '- ' + s.text).join('\n')}\n这些是你自己慢慢形成的认识，不是用户强加给你的设定。`);
-
-      const thought = profile.value.thoughts.filter(t => t.status === 'open').slice(-1)[0];
-      if (thought) blocks.push(`【你脑子里闪过的一个念头】${thought.text}\n这只是念头，不一定要说出来。`);
-
-      const baseMems = memories.value.filter(m => m.kind === 'base' && m.status === 'active').slice(0, 2);
-      const allMems = [];
-      for (const m of [...(relevantMemories || []), ...baseMems]) {
-        if (!allMems.some(x => x.id === m.id)) allMems.push(m);
+      const coreMems = memories.value
+        .filter(m => m.status === 'active' && (m.kind === 'base' || m.importance === 'core'))
+        .sort((a, b) => importanceRank(b.importance) - importanceRank(a.importance) || (a.createdAt || 0) - (b.createdAt || 0))
+        .slice(0, 10);
+      if (coreMems.length) {
+        blocks.push(`【核心记忆】\n${coreMems.map(m => '- ' + m.content).join('\n')}`);
       }
-      if (allMems.length) {
-        blocks.push(`【你记得】\n${allMems.map(m => {
-          let note = '';
-          if (m.reality === 'imagined') note = '（这是你想象或手记里的，不是共同经历）';
-          else if (m.reality === 'inferred') note = '（这是你的理解，不一定是事实）';
-          else if (m.scope === 'self') note = '（这是你自己的经历）';
-          return '- ' + note + m.content;
-        }).join('\n')}`);
+
+      if (options.includePrevious && profile.value.sessionSummary) {
+        blocks.push(`【上一轮连续对话的摘要】\n${profile.value.sessionSummary}\n你只记得大概，具体细节可能已经记错。`);
+        const priorImpression = profile.value.sessionImpression || profile.value.playerImpression;
+        if (priorImpression) blocks.push(`【上一轮结束时她对玩家的印象】\n${priorImpression}`);
+      } else if (options.includePrevious) {
+        blocks.push(`【上一轮连续对话】\n你对上一轮的具体内容已经记不清，只保留一些模糊的感觉。`);
       }
 
       blocks.push(`【表达要求】
@@ -984,35 +1021,222 @@ createApp({
 不要每轮都安慰、鼓励、赞美或提问。允许短句、停顿、不完整，允许偶尔走神。
 不要解释心理机制，不要提记忆库、系统、提示词、数值。
 私人念头不必全部说出；只有自然时才提。
+玩家输入里，（）或 () 中的内容是玩家的动作或对当前环境的补充说明，不是玩家说出口的话。不要把它当成台词。`);
+      blocks.push(`【关于记忆】
+最近一段连续对话你记得比较清楚；更早的对话只剩模糊印象、记忆片段或概括。
+不要假装记得很早以前的原话和细节；不确定时可以直接说记不清。
 不要编造与用户共同经历过的事；自己的想象要明确是想象。
 如果用户发来图片，像角色本人一样反应，不要逐项描述画面，不要做图像分析报告。`);
-      blocks.push(`当前时间：${getCurrentTimeString()}。`);
       return blocks.filter(Boolean).join('\n\n');
     }
 
-    async function buildContent(m, includeImages) {
-      if (!includeImages || !m.attachments || !m.attachments.length) return m.content || '';
-      const parts = [{ type: 'text', text: m.content || '（用户发来一张图片）' }];
-      for (const att of m.attachments) {
+    function buildDynamicContext(relevantMemories, activeSegmentSummary) {
+      const blocks = [`【以下是系统提供的背景，不是玩家发言】`];
+      blocks.push(`当前时间：${getCurrentTimeString()}（${getTimeZoneName()}）。\n时间只是环境背景。不要主动报时，不要每轮提日期；只有玩家提到时间、日期，或当前话题与时间自然相关时，才可以顺带提及。`);
+
+      if (profile.value.playerImpression) blocks.push(`【角色对玩家的印象】\n${profile.value.playerImpression}`);
+
+      const states = profile.value.states.filter(s => s.status !== 'resolved').slice(-4);
+      if (states.length) blocks.push(`【你最近还在意的事】\n${states.map(s => '- ' + s.text).join('\n')}`);
+
+      const growth = profile.value.growth.filter(g => g.status === 'active').slice(-3);
+      if (growth.length) blocks.push(`【你最近的变化】\n${growth.map(g => '- ' + g.text).join('\n')}`);
+      const selfNotes = profile.value.selfModel.filter(s => s.status === 'active').slice(-6);
+      if (selfNotes.length) blocks.push(`【你对自己的认识】\n${selfNotes.map(s => '- ' + s.text).join('\n')}`);
+
+      const thought = profile.value.thoughts.filter(t => t.status === 'open').slice(-1)[0];
+      if (thought) blocks.push(`【你脑子里闪过的一个念头】${thought.text}\n这只是念头，不一定要说出来。`);
+
+      if (activeSegmentSummary) blocks.push(`【本次连续对话较早部分的摘要】\n${activeSegmentSummary}`);
+
+      if (relevantMemories && relevantMemories.length) {
+        blocks.push(`【调出的记忆】\n${relevantMemories.map(m => {
+          let note = '';
+          if (m.reality === 'imagined') note = '（这是你想象或手记里的，不是共同经历）';
+          else if (m.reality === 'inferred') note = '（这是你的理解，不一定是事实）';
+          else if (m.scope === 'self') note = '（这是你自己的经历）';
+          return '- ' + note + m.content;
+        }).join('\n')}`);
+      }
+      return blocks.join('\n\n');
+    }
+
+    function splitPlayerInput(text) {
+      const src = String(text || '');
+      const actions = [];
+      let speech = '';
+      let last = 0;
+      const re = /[（(]([^（）()]*)[）)]/g;
+      let m;
+      while ((m = re.exec(src))) {
+        speech += src.slice(last, m.index);
+        const action = m[1].trim();
+        if (action) actions.push(action);
+        last = re.lastIndex;
+      }
+      speech += src.slice(last);
+      return { speech: speech.trim(), actions };
+    }
+
+    function playerForPrompt(text) {
+      const { speech, actions } = splitPlayerInput(text);
+      const parts = [];
+      if (actions.length) parts.push(`【玩家动作 / 环境补充】\n${actions.map(a => '- ' + a).join('\n')}`);
+      if (speech) parts.push(`【玩家发言】\n${speech}`);
+      if (!parts.length) parts.push('【玩家发言】\n（发来一张图片）');
+      return parts.join('\n\n');
+    }
+
+    function playerInline(text) {
+      const { speech, actions } = splitPlayerInput(text);
+      const parts = [];
+      if (actions.length) parts.push('[动作/环境] ' + actions.join('；'));
+      if (speech) parts.push('[发言] ' + speech);
+      return parts.length ? parts.join(' ') : '[图片]';
+    }
+
+    async function buildFinalUserContent(current, dynamicContext) {
+      const text = `${dynamicContext}\n\n${playerForPrompt(current.content)}`;
+      const parts = [{ type: 'text', text }];
+      for (const att of (current.attachments || [])) {
         const blob = await getAttachmentBlob(att.id);
         if (!blob) continue;
         const dataUrl = await blobToDataURL(blob);
         parts.push({ type: 'image_url', image_url: { url: dataUrl, detail: 'low' } });
       }
-      return parts.length > 1 ? parts : (m.content || '（用户发来一张图片）');
+      return parts.length > 1 ? parts : text;
+    }
+
+    function segmentStartAt(endIndex) {
+      for (let i = endIndex; i >= 1; i--) {
+        const m = messages.value[i];
+        if (!m || m.role !== 'user') continue;
+        let prev = messages.value[i - 1] || null;
+        if (!prev || (prev.role !== 'assistant' && prev.role !== 'user')) {
+          prev = null;
+          for (let j = i - 1; j >= 0; j--) {
+            if (messages.value[j].role === 'assistant') { prev = messages.value[j]; break; }
+          }
+        }
+        if (prev && m.timestamp && prev.timestamp && (m.timestamp - prev.timestamp) >= 3600000) return i;
+      }
+      return 0;
+    }
+
+    function getSegmentWindow(start, currentIndex) {
+      const all = messages.value.slice(start, currentIndex + 1).filter(m => m && (m.content || (m.attachments && m.attachments.length)));
+      let totalChars = all.reduce((n, m) => n + (m.content || '').length, 0);
+      if (all.length <= 80 && totalChars <= 30000) return { start, omitted: [] };
+      let keepStart = currentIndex;
+      let count = 0;
+      let chars = 0;
+      for (let i = currentIndex; i >= start; i--) {
+        const m = messages.value[i];
+        if (!m) continue;
+        const len = (m.content || '').length;
+        if (i < currentIndex && (count >= 60 || chars + len > 20000)) { keepStart = i + 1; break; }
+        count++;
+        chars += len;
+        keepStart = i;
+      }
+      return { start: keepStart, omitted: messages.value.slice(start, keepStart).filter(m => m && (m.content || (m.attachments && m.attachments.length))) };
+    }
+
+    async function summarizeMessages(msgs) {
+      const usable = msgs.filter(m => m.content && (m.role === 'user' || m.role === 'assistant'));
+      if (usable.length < 2) return null;
+      const selected = [];
+      let chars = 0;
+      for (let i = usable.length - 1; i >= 0; i--) {
+        const len = usable[i].content.length;
+        if (selected.length && chars + len > 12000) break;
+        selected.unshift(usable[i]);
+        chars += len;
+      }
+      const transcript = selected.map(m => `${m.role === 'user' ? '用户' : '角色'}：${m.role === 'user' ? playerInline(m.content) : m.content}`).join('\n');
+      const prompt = [
+        { role: 'system', content: `你是记忆整理器，不是角色本人。只依据提供的对话，不得编造。输出严格 JSON：{"summary":"一两句话概括发生了什么、关系或情绪有什么变化"}` },
+        { role: 'user', content: `【旧印象】\n${profile.value.playerImpression || '（还没有明确印象）'}\n\n【对话】\n${transcript}\n\n请概括。` }
+      ];
+      try {
+        const raw = await completeJSON(prompt, 600);
+        const obj = extractJSON(raw);
+        const summary = String(obj.summary || '').trim();
+        if (!summary) return null;
+        return { summary: summary.slice(0, 300) };
+      } catch (e) {
+        console.warn('对话摘要失败', e);
+        return null;
+      }
+    }
+
+    async function ensurePreviousSessionSummary(segmentStart) {
+      if (segmentStart <= 0) return;
+      const prevEnd = messages.value[segmentStart - 1];
+      if (!prevEnd) return;
+      if (profile.value.sessionSummary && profile.value.sessionSummaryEndId === prevEnd.id) return;
+      const prevStart = segmentStartAt(segmentStart - 1);
+      const prevMsgs = messages.value.slice(prevStart, segmentStart).filter(m => m && m.content && (m.role === 'user' || m.role === 'assistant'));
+      if (prevMsgs.length < 2) return;
+      isSummarizingSegment.value = true;
+      loadingText.value = '正在回想上次…';
+      try {
+        const res = await summarizeMessages(prevMsgs);
+        if (!res) return;
+        profile.value.sessionSummary = res.summary;
+        profile.value.sessionSummaryAt = Date.now();
+        profile.value.sessionSummaryEndId = prevEnd.id;
+        profile.value.sessionImpression = profile.value.playerImpression || '';
+        await saveProfile();
+      } finally {
+        isSummarizingSegment.value = false;
+      }
+    }
+
+    async function ensureActiveSegmentSummary(segmentStart, cutStart) {
+      if (cutStart <= segmentStart) return '';
+      const omitted = messages.value.slice(segmentStart, cutStart).filter(m => m && m.content && (m.role === 'user' || m.role === 'assistant'));
+      if (omitted.length < 2) return '';
+      const end = omitted[omitted.length - 1];
+      if (profile.value.activeSegmentSummary && profile.value.activeSegmentSummaryEndId === end.id) return profile.value.activeSegmentSummary;
+      isSummarizingSegment.value = true;
+      try {
+        const res = await summarizeMessages(omitted);
+        if (!res) return profile.value.activeSegmentSummary || '';
+        profile.value.activeSegmentSummary = res.summary;
+        profile.value.activeSegmentSummaryEndId = end.id;
+        await saveProfile();
+        return res.summary;
+      } finally {
+        isSummarizingSegment.value = false;
+      }
     }
 
     async function buildApiMessages(aIdx, relevantMemories) {
-      const api = [{ role: 'system', content: buildSystemPrompt(relevantMemories) }];
-      const start = Math.max(0, aIdx - 16);
-      for (let i = start; i < aIdx; i++) {
+      const current = messages.value[aIdx - 1];
+      if (!current) return [];
+      const segmentStart = segmentStartAt(aIdx - 1);
+      const isNewSegment = segmentStart === aIdx - 1;
+      if (isNewSegment) await ensurePreviousSessionSummary(segmentStart);
+      const window = getSegmentWindow(segmentStart, aIdx - 1);
+      let activeSummary = '';
+      if (window.start > segmentStart) {
+        activeSummary = await ensureActiveSegmentSummary(segmentStart, window.start);
+        if (!activeSummary) activeSummary = '（更早的内容已经记不清，只剩模糊印象。）';
+      }
+
+      const api = [{ role: 'system', content: buildStableSystem({ includePrevious: isNewSegment }) }];
+      const historyEnd = aIdx - 2;
+      for (let i = window.start; i <= historyEnd; i++) {
         const m = messages.value[i];
         if (!m) continue;
         if (m.role === 'assistant' && !m.content) continue;
         if (m.role === 'assistant' && m.content.startsWith('[出错]')) continue;
-        const includeImages = (i === aIdx - 1 && m.role === 'user');
-        api.push({ role: m.role, content: await buildContent(m, includeImages) });
+        if (!m.content && !(m.attachments && m.attachments.length)) continue;
+        api.push({ role: m.role, content: m.content || '（图片）' });
       }
+      const dynamicContext = buildDynamicContext(relevantMemories, activeSummary);
+      api.push({ role: 'user', content: await buildFinalUserContent(current, dynamicContext) });
       return api;
     }
 
@@ -1079,14 +1303,14 @@ createApp({
       }
     }
 
-    async function completeJSON(apiMessages, maxTokens = 1000) {
+    async function completeJSON(apiMessages, maxTokens = 1000, modelName = null) {
       const apiKey = (appSettings.value.apiKey || '').trim();
       if (!apiKey) throw new Error('请先在设置里填写 API Key');
       const baseUrl = (appSettings.value.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120000);
       const body = {
-        model: appSettings.value.model || 'deepseek-flash',
+        model: modelName || appSettings.value.auxModel || 'deepseek-chat',
         messages: apiMessages,
         stream: false,
         temperature: 0.4,
@@ -1159,6 +1383,7 @@ createApp({
       try {
         const relevant = user?.content ? await searchMemories(user.content) : [];
         const api = await buildApiMessages(aIdx, relevant);
+        startLoadingText();
         await streamChat(api, (delta) => {
           assistant.content += delta;
           scheduleScroll();
@@ -1240,18 +1465,32 @@ createApp({
         const context = slice.slice(-16);
         const existingStates = profile.value.states.filter(s => s.status !== 'resolved').slice(-8);
         const existingMemories = memories.value.filter(m => m.status === 'active').slice(-10);
-        const transcript = context.map(m => `[${m.id}] ${m.role === 'user' ? '用户' : '角色'}：${m.content}`).join('\n');
+        const pendingImpression = memories.value
+          .filter(m => m.impressionWorthy && !m.impressionApplied)
+          .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const pendingPreview = pendingImpression.slice(0, 5);
+        const pendingText = pendingPreview.length
+          ? pendingPreview.map((m, i) => `${i + 1}. ${m.content}`).join('\n')
+          : '（暂无）';
+        const impressionCondition = pendingImpression.length >= 5
+          ? '已有至少 5 条待用记忆：请用最早 5 条更新 player_impression。本次新标记的 worthy 记忆留到下一轮。'
+          : pendingImpression.length === 4
+            ? '已有 4 条待用记忆：只有你本次标记 1 条新的 worthy 记忆时，才用这 4 条 + 新标记的 1 条更新 player_impression；否则 player_impression 留空。'
+            : '待用记忆不足 4 条：player_impression 必须留空。';
+        const transcript = context.map(m => `[${m.id}] ${m.role === 'user' ? '用户' : '角色'}：${m.role === 'user' ? playerInline(m.content) : m.content}`).join('\n');
         const schema = `严格输出 JSON，不要输出 Markdown：
 {
-  "memories": [{"kind":"base|episodic|relationship|self|growth","content":"一句具体、可检索的记忆","sourceMessageIds":["msg_id"],"scope":"shared|self","reality":"actual|imagined|inferred","importance":"normal|high|core"}],
+  "memories": [{"kind":"base|episodic|relationship|self|growth","content":"一句具体、可检索的记忆","sourceMessageIds":["msg_id"],"scope":"shared|self","reality":"actual|imagined|inferred","importance":"normal|high|core","impressionWorthy":false}],
   "state_updates": [{"action":"add|update","id":"已有状态 id（update 时填）","text":"自然语言描述的心理影响","status":"active|fading|resolved","sourceMemoryIds":["mem_id"],"sourceMessageIds":["msg_id"]}],
   "thoughts": [{"text":"一句未完成的念头，可以没有","sourceMemoryIds":["mem_id"]}],
   "growth": [{"text":"有证据的变化","evidenceMemoryIds":["mem_id","mem_id"]}],
-  "self_updates": [{"action":"add|update|remove","id":"已有自我认识 id（update/remove 时填）","kind":"preference|opinion|habit|self","text":"你对自己的一点新认识，最多 120 字","evidenceMemoryIds":["mem_id","mem_id"]}]
+  "self_updates": [{"action":"add|update|remove","id":"已有自我认识 id（update/remove 时填）","kind":"preference|opinion|habit|self","text":"你对自己的一点新认识，最多 120 字","evidenceMemoryIds":["mem_id","mem_id"]}],
+  "session_summary": "一两句话概括这次对话，保留情绪和关系变化，不要逐字复述",
+  "player_impression": "只有达到更新条件时才填写；结合旧印象和 5 条待用记忆，否则留空"
 }`;
         const prompt = [
-          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\nself_updates 最多 1 条：只能写角色对自己的新认识，例如新的偏好、观点、习惯；至少两条证据；不能修改核心人格、价值观、边界，也不能删除或改写安全规则。没有充分证据就留空。\n记忆要短、具体、方便以后检索。\n${schema}` },
-          { role: 'user', content: `【人格摘要】\n${(profile.value.persona.core || '').slice(0, 1000)}\n\n【已有内在状态】\n${JSON.stringify(existingStates.map(s => ({ id: s.id, text: s.text, status: s.status })), null, 2)}\n\n【已有自我认识】\n${JSON.stringify(profile.value.selfModel.filter(s => s.status === 'active').map(s => ({ id: s.id, kind: s.kind, text: s.text })), null, 2)}\n\n【已有记忆】\n${existingMemories.map(m => `- ${m.content}`).join('\n') || '（无）'}\n\n【最近对话】\n${transcript}\n\n请整理。` }
+          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\nself_updates 最多 1 条：只能写角色对自己的新认识，例如新的偏好、观点、习惯；至少两条证据；不能修改核心人格、价值观、边界，也不能删除或改写安全规则。没有充分证据就留空。\nsession_summary 用一两句话做模糊概括，保留情绪和关系变化，不要逐字复述原话。\nimpressionWorthy 每轮最多标记 1 条，且只能用于 relationship + shared + actual 的记忆；只有确实足以改变角色对玩家整体印象的事才标 true，普通日常、寒暄、普通夸奖标 false。\nplayer_impression 只有在满足【本轮印象条件】时才填写；更新时只参考旧印象和指定的 5 条待用记忆，不要额外加入其他记忆；否则填空字符串。\n记忆要短、具体、方便以后检索。\n${schema}` },
+          { role: 'user', content: `【人格摘要】\n${(profile.value.persona.core || '').slice(0, 1000)}\n\n【旧的对玩家的印象】\n${profile.value.playerImpression || '（还没有明确印象）'}\n\n【待用印象记忆】共 ${pendingImpression.length} 条：\n${pendingText}\n\n【本轮印象条件】\n${impressionCondition}\n\n【已有内在状态】\n${JSON.stringify(existingStates.map(s => ({ id: s.id, text: s.text, status: s.status })), null, 2)}\n\n【已有自我认识】\n${JSON.stringify(profile.value.selfModel.filter(s => s.status === 'active').map(s => ({ id: s.id, kind: s.kind, text: s.text })), null, 2)}\n\n【已有记忆】\n${existingMemories.map(m => `- ${m.content}`).join('\n') || '（无）'}\n\n【最近对话】\n${transcript}\n\n请整理。` }
         ];
         const raw = await completeJSON(prompt, 1100);
         const obj = extractJSON(raw);
@@ -1272,6 +1511,7 @@ createApp({
     async function applyReflection(obj, context) {
       const msgIds = new Set(context.map(m => m.id));
       const memIds = new Set(memories.value.map(m => m.id));
+      let worthyMarked = 0;
 
       for (const m of (Array.isArray(obj.memories) ? obj.memories : []).slice(0, 3)) {
         const content = String(m.content || '').trim();
@@ -1289,6 +1529,9 @@ createApp({
           scope: m.scope === 'self' ? 'self' : 'shared',
           reality: ['actual', 'imagined', 'inferred'].includes(m.reality) ? m.reality : 'actual',
           importance: ['normal', 'high', 'core'].includes(m.importance) ? m.importance : 'normal',
+          impressionWorthy: false,
+          impressionApplied: false,
+          impressionAppliedAt: 0,
           vector,
           embeddingModel: vector ? EMBED_MODEL : null,
           createdAt: Date.now(),
@@ -1296,6 +1539,10 @@ createApp({
           status: 'active'
         };
         if (mem.reality === 'imagined') mem.scope = 'self';
+        if (!worthyMarked && m.impressionWorthy === true && mem.kind === 'relationship' && mem.scope === 'shared' && mem.reality === 'actual') {
+          mem.impressionWorthy = true;
+          worthyMarked++;
+        }
         memories.value.push(mem);
         memIds.add(mem.id);
       }
@@ -1367,6 +1614,29 @@ createApp({
       }
       if (profile.value.selfEdits.length > 50) profile.value.selfEdits = profile.value.selfEdits.slice(-50);
 
+      const pending = memories.value
+        .filter(m => m.impressionWorthy && !m.impressionApplied)
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      const impression = String(obj.player_impression || '').trim();
+      if (pending.length >= 5 && impression) {
+        const used = pending.slice(0, 5);
+        profile.value.playerImpression = impression.slice(0, 240);
+        profile.value.playerImpressionAt = Date.now();
+        profile.value.playerImpressionEvidenceIds = used.map(m => m.id);
+        for (const m of used) {
+          m.impressionApplied = true;
+          m.impressionAppliedAt = Date.now();
+        }
+      }
+
+      const summary = String(obj.session_summary || '').trim();
+      if (summary) {
+        profile.value.sessionSummary = summary.slice(0, 300);
+        profile.value.sessionSummaryAt = Date.now();
+        profile.value.sessionSummaryEndId = context[context.length - 1].id;
+        profile.value.sessionImpression = profile.value.playerImpression || '';
+      }
+
       if (profile.value.states.length > 30) profile.value.states = profile.value.states.slice(-30);
       if (profile.value.thoughts.length > 20) profile.value.thoughts = profile.value.thoughts.slice(-20);
       if (profile.value.growth.length > 50) profile.value.growth = profile.value.growth.slice(-50);
@@ -1416,6 +1686,10 @@ createApp({
           target.embeddingModel = m.embeddingModel;
         }
         if (importanceRank(m.importance) > importanceRank(target.importance)) target.importance = m.importance;
+        if (m.impressionWorthy) {
+          target.impressionWorthy = true;
+          if (!m.impressionApplied) { target.impressionApplied = false; target.impressionAppliedAt = 0; }
+        }
         target.sourceMessageIds = [...new Set([...(target.sourceMessageIds || []), ...(m.sourceMessageIds || [])])];
         target.lastRecalledAt = Math.max(target.lastRecalledAt || 0, m.lastRecalledAt || 0);
         if (m.status === 'active' || target.status === 'active') target.status = 'active';
@@ -1509,7 +1783,7 @@ createApp({
       try {
         const recent = messages.value.slice(-12).map(m => `${m.role === 'user' ? '用户' : '角色'}：${m.content}`).join('\n');
         const prompt = [
-          { role: 'system', content: buildSystemPrompt([]) },
+          { role: 'system', content: buildStableSystem({ includePrevious: false }) },
           { role: 'user', content: `写一篇简短的第一人称手记，记录你最近的想法或感受。150字以内。不要解释系统、不要写分析报告，只写手记正文。\n\n最近的对话：\n${recent}` }
         ];
         let content = await completeText(prompt, 500);
@@ -1597,6 +1871,12 @@ createApp({
       await deleteAttachmentsForMessages(messages.value);
       messages.value = [];
       branches.value = {};
+      profile.value.sessionSummary = '';
+      profile.value.sessionSummaryAt = 0;
+      profile.value.sessionSummaryEndId = '';
+      profile.value.sessionImpression = '';
+      profile.value.activeSegmentSummary = '';
+      profile.value.activeSegmentSummaryEndId = '';
       await saveMessages();
       await saveBranches();
       notify('对话已清空');
@@ -1609,6 +1889,15 @@ createApp({
       profile.value.growth = [];
       profile.value.selfModel = [];
       profile.value.selfEdits = [];
+      profile.value.sessionSummary = '';
+      profile.value.sessionSummaryAt = 0;
+      profile.value.sessionSummaryEndId = '';
+      profile.value.sessionImpression = '';
+      profile.value.activeSegmentSummary = '';
+      profile.value.activeSegmentSummaryEndId = '';
+      profile.value.playerImpression = '';
+      profile.value.playerImpressionAt = 0;
+      profile.value.playerImpressionEvidenceIds = [];
       profile.value.meta.lastReflectedMessageId = messages.value[messages.value.length - 1]?.id || null;
       profile.value.meta.lastReflectionAt = Date.now();
       await saveMemories();
@@ -1776,6 +2065,7 @@ createApp({
       showSidebar, showSettings, showDiary, isAppReady, loading, loadingText, input, pendingImage, fileInput, importFile, listEl,
       editingIndex, editInput, isGeneratingDiary, isReflecting, isRebuilding, isCleaning, toast, needsRebuildCount,
       activeSelfNotes,
+      pendingImpressionCount,
       traitsText, valuesText, likesText, dislikesText,
       send, stopGeneration, onEnter, onImageSelected, clearPendingImage, attachmentUrl, openImage,
       startEdit, cancelEdit, saveEdit, regenerate, switchRoute,
