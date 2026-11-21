@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aitalk-v2-3';
+const CACHE_NAME = 'aitalk-v2-4';
 const LOCAL_ASSETS = [
   './',
   './index.html',
