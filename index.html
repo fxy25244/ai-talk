@@ -121,10 +121,14 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
 .btn-warn{background:#fff3e0;color:#b45309;flex:1;min-width:120px}
 .btn-danger{background:#ffebeb;color:#d70015;width:100%;margin-top:2px}
 .memory-list{max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px}
-.memory-item,.state-item,.growth-item{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:9px 10px;display:flex;flex-direction:column;gap:4px}
+.memory-item,.state-item,.growth-item,.self-item{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:9px 10px;display:flex;flex-direction:column;gap:4px}
 .item-meta{font-size:10px;color:#999}
 .item-content{font-size:13px;color:#333;line-height:1.55;word-break:break-word}
+.item-actions{display:flex;gap:10px;justify-content:flex-end;align-items:center}
 .link-danger{align-self:flex-end;background:none;border:none;color:#d70015;font-size:11px;cursor:pointer;padding:2px 0}
+.link-quiet{background:none;border:none;color:#007aff;font-size:11px;cursor:pointer;padding:2px 0}
+.settings .check-row{display:flex;flex-direction:row;align-items:center;gap:5px;font-size:11px;color:#666;white-space:nowrap}
+.settings .check-row input{width:14px;height:14px;padding:0}
 
 .diary-overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:flex-end;justify-content:center}
 .diary-panel{width:100%;height:82%;background:#fff;border-radius:20px 20px 0 0;display:flex;flex-direction:column;animation:slideUp .3s ease-out;overflow:hidden;max-width:600px}
@@ -199,6 +203,7 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
           <h4>记忆<span class="count">{{ memories.length }}</span></h4>
           <div class="mini-actions">
             <button @click="forceReflect" :disabled="isReflecting">{{ isReflecting ? '整理中…' : '整理记忆' }}</button>
+            <button @click="cleanupMemories" :disabled="isCleaning">{{ isCleaning ? '整理中…' : '整理旧记忆' }}</button>
             <button @click="rebuildVectors" :disabled="isRebuilding">{{ isRebuilding ? '重建中…' : '重建向量' }}</button>
           </div>
         </div>
@@ -206,9 +211,12 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
         <div v-if="!memories.length" class="hint">还没有记忆。聊几轮后，她会自己整理。</div>
         <div v-else class="memory-list">
           <div v-for="mem in memories" :key="mem.id" class="memory-item">
-            <div class="item-meta">{{ kindLabel(mem.kind) }} · {{ importanceLabel(mem.importance) }}</div>
+            <div class="item-meta">{{ kindLabel(mem.kind) }} · {{ importanceLabel(mem.importance) }}<span v-if="mem.status !== 'active'"> · {{ statusLabel(mem.status) }}</span></div>
             <div class="item-content">{{ mem.content }}</div>
-            <button class="link-danger" @click="deleteMemory(mem.id)">删除</button>
+            <div class="item-actions">
+              <button v-if="mem.status === 'archived'" class="link-quiet" @click="restoreMemory(mem.id)">恢复</button>
+              <button class="link-danger" @click="deleteMemory(mem.id)">删除</button>
+            </div>
           </div>
         </div>
       </section>
@@ -229,6 +237,20 @@ footer button{border:none;border-radius:20px;font-size:14px;font-weight:500;curs
         <div v-for="g in profile.growth" :key="g.id" class="growth-item">
           <div class="item-content">{{ g.text }}</div>
           <button class="link-danger" @click="deleteGrowth(g.id)">回滚</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h4>她对自己的认识</h4>
+          <label class="check-row"><input type="checkbox" v-model="profile.meta.allowSelfEdit" @change="saveProfile"> 允许她慢慢改写</label>
+        </div>
+        <p class="hint">核心人格、价值观和边界只能由你修改。她只能改写“对自己的认识”，而且需要经历作为证据。</p>
+        <div v-if="!activeSelfNotes.length" class="hint">她还没有形成新的自我认识。</div>
+        <div v-for="s in activeSelfNotes" :key="s.id" class="self-item">
+          <div class="item-meta">{{ selfKindLabel(s.kind) }}</div>
+          <div class="item-content">{{ s.text }}</div>
+          <button class="link-danger" @click="revertSelfNote(s.id)">撤销</button>
         </div>
       </section>
 
@@ -346,13 +368,16 @@ createApp({
       return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
     };
     const plain = (obj) => {
-      if (obj === null || typeof obj !== 'object') return obj;
       if (obj instanceof Blob) return obj;
-      if (Array.isArray(obj)) return obj.map(plain);
-      const raw = Vue.toRaw(obj);
-      const out = {};
-      for (const k in raw) out[k] = plain(raw[k]);
-      return out;
+      if (obj === null || typeof obj !== 'object') return obj;
+      try { return JSON.parse(JSON.stringify(obj)); }
+      catch (e) {
+        if (Array.isArray(obj)) return obj.map(plain);
+        const raw = Vue.toRaw(obj);
+        const out = {};
+        for (const k in raw) out[k] = plain(raw[k]);
+        return out;
+      }
     };
 
     const toast = ref('');
@@ -404,7 +429,9 @@ createApp({
         states: [],
         thoughts: [],
         growth: [],
-        meta: { createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null }
+        selfModel: [],
+        selfEdits: [],
+        meta: { createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null, allowSelfEdit: true }
       };
     }
 
@@ -431,6 +458,7 @@ createApp({
     const isGeneratingDiary = ref(false);
     const isReflecting = ref(false);
     const isRebuilding = ref(false);
+    const isCleaning = ref(false);
 
     let loadingTimer = null;
     let activeAbort = null;
@@ -442,6 +470,7 @@ createApp({
     const valuesText = computed({ get: () => profile.value.persona.values.join('、'), set: v => { profile.value.persona.values = splitList(v); } });
     const likesText = computed({ get: () => profile.value.persona.likes.join('、'), set: v => { profile.value.persona.likes = splitList(v); } });
     const dislikesText = computed({ get: () => profile.value.persona.dislikes.join('、'), set: v => { profile.value.persona.dislikes = splitList(v); } });
+    const activeSelfNotes = computed(() => profile.value.selfModel.filter(s => s.status === 'active'));
 
     const getKey = (base) => `role_${activeRoleId.value}_${base}`;
 
@@ -473,7 +502,17 @@ createApp({
         states: Array.isArray(raw.states) ? raw.states : [],
         thoughts: Array.isArray(raw.thoughts) ? raw.thoughts : [],
         growth: Array.isArray(raw.growth) ? raw.growth : [],
-        meta: Object.assign({ createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null }, raw.meta || {})
+        selfModel: Array.isArray(raw.selfModel) ? raw.selfModel.filter(x => x && x.text).map(x => ({
+          id: x.id || uid('self'),
+          text: String(x.text),
+          kind: ['preference', 'opinion', 'habit', 'self'].includes(x.kind) ? x.kind : 'self',
+          evidenceMemoryIds: Array.isArray(x.evidenceMemoryIds) ? x.evidenceMemoryIds : [],
+          status: x.status === 'reverted' ? 'reverted' : 'active',
+          createdAt: x.createdAt || Date.now(),
+          updatedAt: x.updatedAt || x.createdAt || Date.now()
+        })) : [],
+        selfEdits: Array.isArray(raw.selfEdits) ? raw.selfEdits : [],
+        meta: Object.assign({ createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null, allowSelfEdit: true }, raw.meta || {})
       };
     }
 
@@ -765,6 +804,12 @@ createApp({
     function importanceLabel(v) {
       return ({ normal: '普通', high: '重要', core: '核心' })[v] || '普通';
     }
+    function statusLabel(v) {
+      return ({ active: '活跃', fading: '淡化中', archived: '已归档' })[v] || v;
+    }
+    function selfKindLabel(v) {
+      return ({ preference: '偏好', opinion: '观点', habit: '习惯', self: '自我认识' })[v] || '自我认识';
+    }
     function toBottom() {
       nextTick(() => { if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight; });
     }
@@ -839,22 +884,58 @@ createApp({
 
     const needsRebuildCount = computed(() => memories.value.filter(m => !m.vector || m.embeddingModel !== EMBED_MODEL || m.vector.length !== EMBED_DIM).length);
 
+    function normalizeMemoryText(s) {
+      return String(s || '').toLowerCase().replace(/[\s，。！？、,.!?;；:："'“”‘’（）()【】\[\]]/g, '');
+    }
+    function memoryAgeDays(m) {
+      const t = m.lastRecalledAt || m.createdAt || Date.now();
+      return Math.max(0, (Date.now() - t) / 86400000);
+    }
+    function memoryRetention(m) {
+      return Math.exp(-memoryAgeDays(m) / 60);
+    }
+    function importanceBonus(m) {
+      if (m.importance === 'core') return 0.06;
+      if (m.importance === 'high') return 0.03;
+      return 0;
+    }
+    function sameMemory(a, b) {
+      if (!a || !b) return false;
+      if (a.id === b.id) return true;
+      if (normalizeMemoryText(a.content) === normalizeMemoryText(b.content)) return true;
+      if (a.vector && b.vector && a.vector.length === b.vector.length) {
+        return dotProduct(a.vector, b.vector) > 0.92;
+      }
+      return false;
+    }
+
     async function searchMemories(queryText) {
-      const active = memories.value.filter(m => m.status === 'active');
-      if (!active.length) return [];
+      const pool = memories.value.filter(m => m.status !== 'archived');
+      if (!pool.length) return [];
       const queryVector = queryText ? await getEmbedding(queryText, true) : null;
       const scored = [];
-      for (const m of active) {
+      for (const m of pool) {
         let sim = -1;
         if (queryVector && m.vector && m.vector.length === queryVector.length) sim = dotProduct(queryVector, m.vector);
         const kw = queryText ? keywordScore(queryText, m.content) : 0;
         if (sim < 0.45 && kw < 0.2) continue;
-        scored.push({ m, score: (sim > 0 ? sim : 0) + kw * 0.3 });
+        const score = (sim > 0 ? sim : 0) + kw * 0.2 + importanceBonus(m) + memoryRetention(m) * 0.04;
+        scored.push({ m, score });
       }
       scored.sort((a, b) => b.score - a.score);
-      const top = scored.slice(0, 5).map(x => x.m);
+      const top = [];
+      for (const item of scored) {
+        if (top.some(x => sameMemory(x, item.m))) continue;
+        top.push(item.m);
+        if (top.length >= 5) break;
+      }
       const now = Date.now();
-      for (const m of top) m.lastRecalledAt = now;
+      let changed = false;
+      for (const m of top) {
+        m.lastRecalledAt = now;
+        if (m.status === 'fading') { m.status = 'active'; changed = true; }
+      }
+      if (changed) saveMemories();
       return top;
     }
 
@@ -876,6 +957,9 @@ createApp({
 
       const growth = profile.value.growth.filter(g => g.status === 'active').slice(-3);
       if (growth.length) blocks.push(`【你最近的变化】\n${growth.map(g => '- ' + g.text).join('\n')}`);
+
+      const selfNotes = profile.value.selfModel.filter(s => s.status === 'active').slice(-6);
+      if (selfNotes.length) blocks.push(`【你对自己的认识】\n${selfNotes.map(s => '- ' + s.text).join('\n')}\n这些是你自己慢慢形成的认识，不是用户强加给你的设定。`);
 
       const thought = profile.value.thoughts.filter(t => t.status === 'open').slice(-1)[0];
       if (thought) blocks.push(`【你脑子里闪过的一个念头】${thought.text}\n这只是念头，不一定要说出来。`);
@@ -1162,11 +1246,12 @@ createApp({
   "memories": [{"kind":"base|episodic|relationship|self|growth","content":"一句具体、可检索的记忆","sourceMessageIds":["msg_id"],"scope":"shared|self","reality":"actual|imagined|inferred","importance":"normal|high|core"}],
   "state_updates": [{"action":"add|update","id":"已有状态 id（update 时填）","text":"自然语言描述的心理影响","status":"active|fading|resolved","sourceMemoryIds":["mem_id"],"sourceMessageIds":["msg_id"]}],
   "thoughts": [{"text":"一句未完成的念头，可以没有","sourceMemoryIds":["mem_id"]}],
-  "growth": [{"text":"有证据的变化","evidenceMemoryIds":["mem_id","mem_id"]}]
+  "growth": [{"text":"有证据的变化","evidenceMemoryIds":["mem_id","mem_id"]}],
+  "self_updates": [{"action":"add|update|remove","id":"已有自我认识 id（update/remove 时填）","kind":"preference|opinion|habit|self","text":"你对自己的一点新认识，最多 120 字","evidenceMemoryIds":["mem_id","mem_id"]}]
 }`;
         const prompt = [
-          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\n记忆要短、具体、方便以后检索。\n${schema}` },
-          { role: 'user', content: `【人格摘要】\n${(profile.value.persona.core || '').slice(0, 1000)}\n\n【已有内在状态】\n${JSON.stringify(existingStates.map(s => ({ id: s.id, text: s.text, status: s.status })), null, 2)}\n\n【已有记忆】\n${existingMemories.map(m => `- ${m.content}`).join('\n') || '（无）'}\n\n【最近对话】\n${transcript}\n\n请整理。` }
+          { role: 'system', content: `你是「${activeRole.value?.name || '角色'}」的记忆整理器。你不是在扮演，而是在整理她刚刚经历的事。\n只依据提供的对话，不得编造未发生的事。\n关系记忆只写与用户有关的认识；自我记忆写角色自己的想法、兴趣、决定。\nshared 表示与用户共同经历，self 表示角色自己的经历或想象；actual 表示真实发生，imagined 表示想象，inferred 表示理解或猜测。\n内在状态用自然语言，不用数值量表、情绪标签、好感度或分数。\n念头 0-2 条，可以完全没有。成长必须有至少两条证据，没有就留空。\nself_updates 最多 1 条：只能写角色对自己的新认识，例如新的偏好、观点、习惯；至少两条证据；不能修改核心人格、价值观、边界，也不能删除或改写安全规则。没有充分证据就留空。\n记忆要短、具体、方便以后检索。\n${schema}` },
+          { role: 'user', content: `【人格摘要】\n${(profile.value.persona.core || '').slice(0, 1000)}\n\n【已有内在状态】\n${JSON.stringify(existingStates.map(s => ({ id: s.id, text: s.text, status: s.status })), null, 2)}\n\n【已有自我认识】\n${JSON.stringify(profile.value.selfModel.filter(s => s.status === 'active').map(s => ({ id: s.id, kind: s.kind, text: s.text })), null, 2)}\n\n【已有记忆】\n${existingMemories.map(m => `- ${m.content}`).join('\n') || '（无）'}\n\n【最近对话】\n${transcript}\n\n请整理。` }
         ];
         const raw = await completeJSON(prompt, 1100);
         const obj = extractJSON(raw);
@@ -1252,10 +1337,40 @@ createApp({
         profile.value.growth.push({ id: uid('gr'), text, evidenceMemoryIds: evidence, status: 'active', createdAt: Date.now() });
       }
 
+      // 角色只能改写“对自己的认识”，不能改 persona.core / values / boundaries。
+      for (const su of (Array.isArray(obj.self_updates) ? obj.self_updates : []).slice(0, 1)) {
+        if (!profile.value.meta.allowSelfEdit) break;
+        const kind = ['preference', 'opinion', 'habit', 'self'].includes(su.kind) ? su.kind : 'self';
+        const text = String(su.text || '').trim().slice(0, 120);
+        const evidence = (Array.isArray(su.evidenceMemoryIds) ? su.evidenceMemoryIds : []).filter(id => memIds.has(id));
+        if (evidence.length < 2) continue;
+        const action = su.action === 'remove' || su.action === 'update' ? su.action : 'add';
+        if (action === 'remove' || action === 'update') {
+          const note = profile.value.selfModel.find(x => x.id === su.id && x.status === 'active');
+          if (!note) continue;
+          const before = note.text;
+          if (action === 'remove') note.status = 'reverted';
+          else {
+            if (!text) continue;
+            note.text = text;
+            note.kind = kind;
+            note.updatedAt = Date.now();
+          }
+          profile.value.selfEdits.push({ id: uid('se'), action, before, after: action === 'remove' ? '' : note.text, evidenceMemoryIds: evidence, createdAt: Date.now() });
+        } else {
+          if (!text) continue;
+          const active = profile.value.selfModel.filter(x => x.status === 'active');
+          if (active.length >= 8) active[0].status = 'reverted';
+          profile.value.selfModel.push({ id: uid('self'), text, kind, evidenceMemoryIds: evidence, status: 'active', createdAt: Date.now(), updatedAt: Date.now() });
+          profile.value.selfEdits.push({ id: uid('se'), action: 'add', before: '', after: text, evidenceMemoryIds: evidence, createdAt: Date.now() });
+        }
+      }
+      if (profile.value.selfEdits.length > 50) profile.value.selfEdits = profile.value.selfEdits.slice(-50);
+
       if (profile.value.states.length > 30) profile.value.states = profile.value.states.slice(-30);
       if (profile.value.thoughts.length > 20) profile.value.thoughts = profile.value.thoughts.slice(-20);
       if (profile.value.growth.length > 50) profile.value.growth = profile.value.growth.slice(-50);
-      if (memories.value.length > 250) memories.value = memories.value.slice(-250);
+      await maintainMemories();
     }
 
     async function forceReflect() {
@@ -1282,6 +1397,94 @@ createApp({
       } finally {
         isRebuilding.value = false;
       }
+    }
+
+    function importanceRank(v) {
+      return v === 'core' ? 3 : v === 'high' ? 2 : 1;
+    }
+
+    function dedupeMemories() {
+      const result = [];
+      let merged = 0;
+      for (const m of memories.value) {
+        const target = result.find(x => x.kind === m.kind && x.scope === m.scope && sameMemory(x, m));
+        if (!target) { result.push({ ...m }); continue; }
+        merged++;
+        if (String(m.content).length > String(target.content).length) {
+          target.content = m.content;
+          target.vector = m.vector;
+          target.embeddingModel = m.embeddingModel;
+        }
+        if (importanceRank(m.importance) > importanceRank(target.importance)) target.importance = m.importance;
+        target.sourceMessageIds = [...new Set([...(target.sourceMessageIds || []), ...(m.sourceMessageIds || [])])];
+        target.lastRecalledAt = Math.max(target.lastRecalledAt || 0, m.lastRecalledAt || 0);
+        if (m.status === 'active' || target.status === 'active') target.status = 'active';
+        else if (target.status === 'archived' && m.status !== 'archived') target.status = m.status;
+      }
+      memories.value = result;
+      return merged;
+    }
+
+    async function maintainMemories() {
+      let faded = 0;
+      let archived = 0;
+      for (const m of memories.value) {
+        if (m.status === 'archived' || m.importance === 'core' || m.importance === 'high') continue;
+        const days = memoryAgeDays(m);
+        if (m.status === 'active' && days >= 180) { m.status = 'archived'; archived++; }
+        else if (m.status === 'active' && days >= 60) { m.status = 'fading'; faded++; }
+        else if (m.status === 'fading' && days >= 150) { m.status = 'archived'; archived++; }
+      }
+      const active = memories.value.filter(m => m.status === 'active');
+      if (active.length > 300) {
+        let over = active.length - 300;
+        const candidates = active.filter(m => m.importance === 'normal').sort((a, b) => memoryAgeDays(b) - memoryAgeDays(a));
+        for (const m of candidates) {
+          if (over <= 0) break;
+          m.status = 'archived';
+          archived++;
+          over--;
+        }
+      }
+      if (faded || archived) await saveMemories();
+      return { faded, archived };
+    }
+
+    async function cleanupMemories() {
+      if (isCleaning.value) return;
+      if (!memories.value.length) return notify('还没有记忆');
+      if (!confirm('会合并重复记忆，并把久未想起的普通记忆标为淡化/归档；不会删除。建议先导出备份。继续？')) return;
+      isCleaning.value = true;
+      const before = memories.value.length;
+      try {
+        const merged = dedupeMemories();
+        const result = await maintainMemories();
+        await saveMemories();
+        const vectorNote = needsRebuildCount.value > 0 ? '；旧向量未重建，语义重复可能还没合并' : '';
+        notify(`整理完成：合并 ${merged} 条，淡化 ${result.faded} 条，归档 ${result.archived} 条${vectorNote}`);
+      } finally {
+        isCleaning.value = false;
+      }
+    }
+
+    async function restoreMemory(id) {
+      const m = memories.value.find(x => x.id === id);
+      if (!m) return;
+      m.status = 'active';
+      m.lastRecalledAt = Date.now();
+      await saveMemories();
+      notify('已恢复这条记忆');
+    }
+
+    async function revertSelfNote(id) {
+      if (!confirm('撤销这条自我认识？')) return;
+      const note = profile.value.selfModel.find(s => s.id === id && s.status === 'active');
+      if (!note) return;
+      note.status = 'reverted';
+      profile.value.selfEdits.push({ id: uid('se'), action: 'revert_by_user', before: note.text, after: '', evidenceMemoryIds: note.evidenceMemoryIds || [], createdAt: Date.now() });
+      if (profile.value.selfEdits.length > 50) profile.value.selfEdits = profile.value.selfEdits.slice(-50);
+      await saveProfile();
+      notify('已撤销');
     }
 
     async function deleteMemory(id) {
@@ -1404,6 +1607,8 @@ createApp({
       profile.value.states = [];
       profile.value.thoughts = [];
       profile.value.growth = [];
+      profile.value.selfModel = [];
+      profile.value.selfEdits = [];
       profile.value.meta.lastReflectedMessageId = messages.value[messages.value.length - 1]?.id || null;
       profile.value.meta.lastReflectionAt = Date.now();
       await saveMemories();
@@ -1569,14 +1774,16 @@ createApp({
     return {
       appSettings, roleList, activeRoleId, activeRole, roleName, profile, messages, memories, journal, branches,
       showSidebar, showSettings, showDiary, isAppReady, loading, loadingText, input, pendingImage, fileInput, importFile, listEl,
-      editingIndex, editInput, isGeneratingDiary, isReflecting, isRebuilding, toast, needsRebuildCount,
+      editingIndex, editInput, isGeneratingDiary, isReflecting, isRebuilding, isCleaning, toast, needsRebuildCount,
+      activeSelfNotes,
       traitsText, valuesText, likesText, dislikesText,
       send, stopGeneration, onEnter, onImageSelected, clearPendingImage, attachmentUrl, openImage,
       startEdit, cancelEdit, saveEdit, regenerate, switchRoute,
       switchRole, addNewRole, deleteRole, openSettings, closeSettings, saveAppSettings, savePersona,
       exportData, importData, clearChat, clearMemories, deleteMemory, deleteState, deleteGrowth,
+      cleanupMemories, restoreMemory, revertSelfNote,
       forceReflect, rebuildVectors, generateDiary, deleteJournal,
-      getAvatarChar, showTimeDivider, formatTime, parseMessage, kindLabel, importanceLabel
+      getAvatarChar, showTimeDivider, formatTime, parseMessage, kindLabel, importanceLabel, statusLabel, selfKindLabel
     };
   }
 }).mount('#app');
