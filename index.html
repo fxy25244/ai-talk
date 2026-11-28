@@ -551,7 +551,17 @@ createApp({
           name: raw.player?.name || oldCfg?.playerName || '',
           address: raw.player?.address || oldCfg?.playerAddress || ''
         },
-        states: Array.isArray(raw.states) ? raw.states : [],
+        states: (Array.isArray(raw.states) ? raw.states : []).filter(s => s && s.text).map(s => ({
+          id: s.id || uid('st'),
+          kind: s.kind === 'mood' ? 'mood' : 'concern',
+          text: String(s.text),
+          status: ['active', 'fading', 'resolved'].includes(s.status) ? s.status : 'active',
+          sourceMemoryIds: Array.isArray(s.sourceMemoryIds) ? s.sourceMemoryIds : [],
+          sourceMessageIds: Array.isArray(s.sourceMessageIds) ? s.sourceMessageIds : [],
+          createdAt: s.createdAt || Date.now(),
+          updatedAt: s.updatedAt || s.createdAt || Date.now(),
+          reviewAfter: Number.isFinite(s.reviewAfter) ? s.reviewAfter : 0
+        })),
         thoughts: Array.isArray(raw.thoughts) ? raw.thoughts : [],
         growth: Array.isArray(raw.growth) ? raw.growth : [],
         selfModel: Array.isArray(raw.selfModel) ? raw.selfModel.filter(x => x && x.text).map(x => ({
@@ -568,14 +578,31 @@ createApp({
         playerImpression: typeof raw.playerImpression === 'string' ? raw.playerImpression : '',
         playerImpressionAt: raw.playerImpressionAt || 0,
         playerImpressionEvidenceIds: Array.isArray(raw.playerImpressionEvidenceIds) ? raw.playerImpressionEvidenceIds : [],
-        sessionSummary: typeof raw.sessionSummary === 'string' ? raw.sessionSummary : '',
+        sessionSummary: cleanSummaryText(typeof raw.sessionSummary === 'string' ? raw.sessionSummary : ''),
         sessionSummaryAt: raw.sessionSummaryAt || 0,
         sessionSummaryEndId: raw.sessionSummaryEndId || '',
         sessionImpression: typeof raw.sessionImpression === 'string' ? raw.sessionImpression : '',
-        activeSegmentSummary: typeof raw.activeSegmentSummary === 'string' ? raw.activeSegmentSummary : '',
+        activeSegmentSummary: cleanSummaryText(typeof raw.activeSegmentSummary === 'string' ? raw.activeSegmentSummary : ''),
         activeSegmentSummaryEndId: raw.activeSegmentSummaryEndId || '',
         meta: Object.assign({ createdAt: Date.now(), lastActiveAt: Date.now(), lastReflectionAt: 0, lastReflectedMessageId: null, allowSelfEdit: true }, raw.meta || {})
       };
+    }
+
+    function isBadHistoryMessage(m) {
+      if (!m) return true;
+      if (m.error) return true;
+      const c = String(m.content || '').trim();
+      if (!c) return false;
+      if (c.includes('[出错]')) return true;
+      return /^[（(]\s*图片过大\s*[）)]$/.test(c);
+    }
+
+    function cleanSummaryText(text) {
+      let s = String(text || '');
+      s = s.replace(/[（(]\s*图片过大\s*[）)]/g, '');
+      s = s.replace(/[^。！？\n]*图片过大[^。！？\n]*[。！？]?/g, '');
+      s = s.replace(/\[出错\][^\n]*/g, '');
+      return s.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
     }
 
     function normalizeMessages(raw) {
@@ -590,6 +617,7 @@ createApp({
           timestamp: m.timestamp || Date.now(),
           origin: m.origin || 'chat',
           reality: m.reality || 'actual',
+          error: m.error === true,
           sources: Array.isArray(m.sources) ? m.sources.filter(s => s && s.url).map(s => ({ url: s.url, title: s.title || s.url })) : [],
           attachments: Array.isArray(m.attachments) ? m.attachments.filter(a => a && a.id).map(a => ({ id: a.id, type: 'image', mime: a.mime || 'image/jpeg', width: a.width || 0, height: a.height || 0 })) : []
         });
@@ -1077,7 +1105,7 @@ createApp({
       else if (profile.value.player.name) blocks.push(`用户叫「${profile.value.player.name}」。`);
       if (profile.value.world) blocks.push(`【世界观】\n${profile.value.world}`);
 
-      const coreMems = memories.value
+      const coreMems = options.lean ? [] : memories.value
         .filter(m => m.status === 'active' && (m.kind === 'base' || m.importance === 'core'))
         .sort((a, b) => importanceRank(b.importance) - importanceRank(a.importance) || (a.createdAt || 0) - (b.createdAt || 0))
         .slice(0, 10);
@@ -1085,12 +1113,15 @@ createApp({
         blocks.push(`【核心记忆】\n${coreMems.map(m => '- ' + m.content).join('\n')}`);
       }
 
-      if (options.includePrevious && profile.value.sessionSummary) {
-        blocks.push(`【上一轮连续对话的摘要】\n${profile.value.sessionSummary}\n你只记得大概，具体细节可能已经记错。`);
-        const priorImpression = profile.value.sessionImpression || profile.value.playerImpression;
-        if (priorImpression) blocks.push(`【上一轮结束时她对玩家的印象】\n${priorImpression}`);
-      } else if (options.includePrevious) {
-        blocks.push(`【上一轮连续对话】\n你对上一轮的具体内容已经记不清，只保留一些模糊的感觉。`);
+      if (options.includePrevious && !options.lean) {
+        const summary = cleanSummaryText(profile.value.sessionSummary);
+        if (summary) {
+          blocks.push(`【上一轮连续对话的摘要】\n${summary}\n你只记得大概，具体细节可能已经记错。`);
+          const priorImpression = profile.value.sessionImpression || profile.value.playerImpression;
+          if (priorImpression) blocks.push(`【上一轮结束时她对玩家的印象】\n${priorImpression}`);
+        } else {
+          blocks.push(`【上一轮连续对话】\n你对上一轮的具体内容已经记不清，只保留一些模糊的感觉。`);
+        }
       }
 
       blocks.push(`【表达要求】
@@ -1134,7 +1165,8 @@ createApp({
       const thought = profile.value.thoughts.filter(t => t.status === 'open').slice(-1)[0];
       if (thought) blocks.push(`【你脑子里闪过的一个念头】${thought.text}\n这只是念头，不一定要说出来。`);
 
-      if (activeSegmentSummary) blocks.push(`【本次连续对话较早部分的摘要】\n${activeSegmentSummary}`);
+      const segmentSummary = cleanSummaryText(activeSegmentSummary);
+      if (segmentSummary) blocks.push(`【本次连续对话较早部分的摘要】\n${segmentSummary}`);
 
       if (relevantMemories && relevantMemories.length) {
         blocks.push(`【调出的记忆】\n${relevantMemories.map(m => {
@@ -1146,6 +1178,10 @@ createApp({
         }).join('\n')}`);
       }
       return blocks.join('\n\n');
+    }
+
+    function buildLeanDynamicContext() {
+      return `【以下是系统提供的背景，不是玩家发言】\n当前时间：${getCurrentTimeString()}（${getTimeZoneName()}）。`;
     }
 
     function splitPlayerInput(text) {
@@ -1230,7 +1266,7 @@ createApp({
     }
 
     async function summarizeMessages(msgs) {
-      const usable = msgs.filter(m => m.content && (m.role === 'user' || m.role === 'assistant'));
+      const usable = msgs.filter(m => m.content && (m.role === 'user' || m.role === 'assistant') && !isBadHistoryMessage(m));
       if (usable.length < 2) return null;
       const selected = [];
       let chars = 0;
@@ -1248,9 +1284,9 @@ createApp({
       try {
         const raw = await completeJSON(prompt, 600);
         const obj = extractJSON(raw);
-        const summary = String(obj.summary || '').trim();
+        const summary = cleanSummaryText(obj.summary || '').slice(0, 300);
         if (!summary) return null;
-        return { summary: summary.slice(0, 300) };
+        return { summary };
       } catch (e) {
         console.warn('对话摘要失败', e);
         return null;
@@ -1299,30 +1335,36 @@ createApp({
       }
     }
 
-    async function buildApiMessages(aIdx, relevantMemories) {
+    async function buildApiMessages(aIdx, relevantMemories, options = {}) {
       const current = messages.value[aIdx - 1];
       if (!current) return [];
+      const lean = options.lean === true;
       const segmentStart = segmentStartAt(aIdx - 1);
       const isNewSegment = segmentStart === aIdx - 1;
-      if (isNewSegment) await ensurePreviousSessionSummary(segmentStart);
-      const window = getSegmentWindow(segmentStart, aIdx - 1);
+      let window;
       let activeSummary = '';
-      if (window.start > segmentStart) {
-        activeSummary = await ensureActiveSegmentSummary(segmentStart, window.start);
-        if (!activeSummary) activeSummary = '（更早的内容已经记不清，只剩模糊印象。）';
+      if (lean) {
+        window = { start: Math.max(0, aIdx - 10), omitted: [] };
+      } else {
+        if (isNewSegment) await ensurePreviousSessionSummary(segmentStart);
+        window = getSegmentWindow(segmentStart, aIdx - 1);
+        if (window.start > segmentStart) {
+          activeSummary = await ensureActiveSegmentSummary(segmentStart, window.start);
+          if (!activeSummary) activeSummary = '（更早的内容已经记不清，只剩模糊印象。）';
+        }
       }
 
-      const api = [{ role: 'system', content: buildStableSystem({ includePrevious: isNewSegment }) }];
+      const api = [{ role: 'system', content: buildStableSystem({ includePrevious: !lean && isNewSegment, lean }) }];
       const historyEnd = aIdx - 2;
       for (let i = window.start; i <= historyEnd; i++) {
         const m = messages.value[i];
         if (!m) continue;
+        if (isBadHistoryMessage(m)) continue;
         if (m.role === 'assistant' && !m.content) continue;
-        if (m.role === 'assistant' && m.content.startsWith('[出错]')) continue;
-        if (!m.content && !(m.attachments && m.attachments.length)) continue;
-        api.push({ role: m.role, content: m.content || '（图片）' });
+        if (!m.content) continue;
+        api.push({ role: m.role, content: m.content });
       }
-      const dynamicContext = buildDynamicContext(relevantMemories, activeSummary);
+      const dynamicContext = lean ? buildLeanDynamicContext() : buildDynamicContext(relevantMemories, activeSummary);
       api.push({ role: 'user', content: await buildFinalUserContent(current, dynamicContext) });
       return api;
     }
@@ -1332,13 +1374,23 @@ createApp({
     }
     async function readApiError(res) {
       let text = '';
-      try { text = (await res.text()).slice(0, 500); } catch (e) {}
+      try { text = (await res.text()).slice(0, 1200); } catch (e) {}
+      let detail = '';
+      try {
+        const j = JSON.parse(text);
+        detail = (typeof j?.error === 'string' ? j.error : '') || j?.error?.message || j?.message || '';
+      } catch (e) {
+        detail = text;
+      }
+      detail = String(detail || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
       if (res.status === 401) return 'API Key 无效或已过期';
       if (res.status === 402) return '账户余额不足';
+      if (res.status === 413) return '请求太大' + (detail ? `：${detail}` : '，请减少图片或上下文');
+      if (res.status === 422) return '参数不被接受' + (detail ? `：${detail}` : '');
       if (res.status === 429) return '请求太频繁，稍后再试';
-      if (res.status === 400) return '请求被拒绝，可能是图片格式、大小或联网工具不支持';
+      if (res.status === 400) return detail ? `请求被拒绝（400）：${detail}` : '请求被拒绝（400）：上下文、图片或工具参数可能不被接受';
       if (res.status >= 500) return '服务端暂时不可用';
-      return text || `请求失败（${res.status}）`;
+      return detail || `请求失败（${res.status}）`;
     }
 
     function safeSourceUrl(url) {
@@ -1367,7 +1419,7 @@ createApp({
       return [...map.values()];
     }
 
-    async function streamChat(apiMessages, onDelta, maxTokens = 400, onMeta = null) {
+    async function streamChat(apiMessages, onDelta, maxTokens = 400, onMeta = null, options = {}) {
       const apiKey = (appSettings.value.apiKey || '').trim();
       if (!apiKey) throw new Error('请先在设置里填写 API Key');
       const baseUrl = (appSettings.value.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
@@ -1382,7 +1434,7 @@ createApp({
           temperature: 0.95,
           max_tokens: maxTokens
         };
-        if (appSettings.value.webSearch) {
+        if (appSettings.value.webSearch && !options.disableTools) {
           body.tools = [{ type: 'deepseek_web_search' }, { type: 'deepseek_read_url' }];
         }
         const res = await fetch(`${baseUrl}/chat/completions`, {
@@ -1391,7 +1443,12 @@ createApp({
           body: JSON.stringify(body),
           signal: controller.signal
         });
-        if (!res.ok) throw new Error(await readApiError(res));
+        if (!res.ok) {
+          const message = await readApiError(res);
+          const err = new Error(message);
+          err.status = res.status;
+          throw err;
+        }
         if (!res.body) throw new Error('响应没有可读流');
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -1510,23 +1567,36 @@ createApp({
       const user = messages.value[aIdx - 1];
       startLoadingText();
       try {
+        assistant.error = false;
         assistant.sources = assistant.sources || [];
         const relevant = user?.content ? await searchMemories(user.content) : [];
         const api = await buildApiMessages(aIdx, relevant);
+        const run = async (list, opts = {}) => {
+          await streamChat(list, (delta) => {
+            assistant.content += delta;
+            scheduleScroll();
+          }, 400, (meta) => {
+            if (meta?.sources?.length) assistant.sources = meta.sources;
+          }, opts);
+        };
         startLoadingText();
-        await streamChat(api, (delta) => {
-          assistant.content += delta;
-          scheduleScroll();
-        }, 400, (meta) => {
-          if (meta?.sources?.length) assistant.sources = meta.sources;
-        });
+        try {
+          await run(api);
+        } catch (e) {
+          if (e?.status !== 400) throw e;
+          assistant.content = '';
+          assistant.sources = [];
+          const leanApi = await buildApiMessages(aIdx, [], { lean: true });
+          await run(leanApi, { disableTools: true });
+          notify('本轮上下文过长，已自动精简重试');
+        }
         if (!assistant.content.trim()) assistant.content = '（她沉默了一会儿。）';
       } catch (e) {
         if (e?.name === 'AbortError') {
           if (!assistant.content.trim()) assistant.content = '（停住了。）';
         } else {
-          const msg = `[出错] ${friendlyError(e)}`;
-          assistant.content = assistant.content ? assistant.content + '\n\n' + msg : msg;
+          assistant.error = true;
+          assistant.content = `[出错] ${friendlyError(e)}`;
         }
       } finally {
         stopLoadingText();
@@ -1562,7 +1632,7 @@ createApp({
       };
       messages.value.push(userMsg);
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', error: false, sources: [], attachments: [] });
       loading.value = true;
       await saveMessages();
       toBottom();
@@ -1587,7 +1657,7 @@ createApp({
         const idx = messages.value.findIndex(m => m.id === cutoff);
         if (idx >= 0) start = idx + 1;
       }
-      const slice = messages.value.slice(start).filter(m => m.content && (m.role === 'user' || m.role === 'assistant') && !(m.role === 'assistant' && m.content.startsWith('[出错]')));
+      const slice = messages.value.slice(start).filter(m => m.content && (m.role === 'user' || m.role === 'assistant') && !isBadHistoryMessage(m));
       const userTurns = slice.filter(m => m.role === 'user').length;
       if (!force && userTurns < REFLECT_EVERY) return;
       if (slice.length < 2) { if (force) notify('还没有足够的对话'); return; }
@@ -1695,7 +1765,7 @@ createApp({
           st.sourceMessageIds = srcMsg;
           st.updatedAt = Date.now();
         } else {
-          profile.value.states.push({ id: uid('st'), text, status, sourceMemoryIds: srcMem, sourceMessageIds: srcMsg, createdAt: Date.now(), updatedAt: Date.now(), reviewAfter: 0 });
+          profile.value.states.push({ id: uid('st'), kind: 'concern', text, status, sourceMemoryIds: srcMem, sourceMessageIds: srcMsg, createdAt: Date.now(), updatedAt: Date.now(), reviewAfter: 0 });
         }
       }
 
@@ -1761,7 +1831,7 @@ createApp({
         }
       }
 
-      const summary = String(obj.session_summary || '').trim();
+      const summary = cleanSummaryText(obj.session_summary || '').slice(0, 300);
       if (summary) {
         profile.value.sessionSummary = summary.slice(0, 300);
         profile.value.sessionSummaryAt = Date.now();
@@ -2060,7 +2130,7 @@ createApp({
       editingIndex.value = -1;
       editInput.value = '';
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', error: false, sources: [], attachments: [] });
       loading.value = true;
       await saveMessages();
       toBottom();
@@ -2081,7 +2151,7 @@ createApp({
       loading.value = true;
       await saveMessages();
       const aIdx = messages.value.length;
-      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', sources: [], attachments: [] });
+      messages.value.push({ id: uid('msg'), role: 'assistant', content: '', timestamp: Date.now(), origin: 'chat', reality: 'actual', error: false, sources: [], attachments: [] });
       await saveMessages();
       await replyTo(aIdx);
     }
